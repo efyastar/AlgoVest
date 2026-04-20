@@ -103,7 +103,7 @@ export default function App() {
                   </div>
                   <div>
                     <p className="text-text-main text-sm font-semibold">Want to invest today?</p>
-                    <p className="text-text-muted text-xs mt-0.5">Get an AI suggestion for your budget</p>
+                    <p className="text-text-muted text-xs mt-0.5">Ask Afrifa what to do with your budget</p>
                   </div>
                 </div>
                 <button

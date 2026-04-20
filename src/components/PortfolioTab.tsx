@@ -103,20 +103,20 @@ export default function PortfolioTab() {
       {/* AI Suggestion */}
       <div className="bg-surface border border-border rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-text-muted text-xs font-medium">AI PORTFOLIO REVIEW</p>
+          <p className="text-text-muted text-xs font-medium">AFRIFA\'S PORTFOLIO</p>
           <button
             onClick={getAISuggestion}
             disabled={loadingSuggestion}
             className="text-primary text-xs font-medium disabled:opacity-50"
           >
-            {loadingSuggestion ? 'Analysing...' : '✦ Analyse'}
+            {loadingSuggestion ? 'Afriafa is...' : '✦ Ask Afrifa'}
           </button>
         </div>
         {aiSuggestion ? (
           <p className="text-text-main text-sm leading-relaxed">{aiSuggestion}</p>
         ) : (
           <p className="text-text-muted text-sm">
-            Tap analyse to get AI feedback on your current portfolio
+            Ask Afrifa to review your portfolio
           </p>
         )}
       </div>

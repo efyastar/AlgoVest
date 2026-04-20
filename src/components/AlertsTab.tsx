@@ -148,7 +148,7 @@ export default function AlertsTab() {
                     <p className="text-text-muted text-xs mt-1">Current price: {alert.currentPrice}</p>
                     {aiResponse[alert.id] ? (
                       <div className="mt-3 bg-elevated rounded-lg p-3">
-                        <p className="text-text-muted text-xs font-medium mb-1">AI SAYS</p>
+                        <p className="text-text-muted text-xs font-medium mb-1">AFRIFA SAYS</p>
                         <p className="text-text-main text-xs leading-relaxed">{aiResponse[alert.id]}</p>
                       </div>
                     ) : (
@@ -157,7 +157,7 @@ export default function AlertsTab() {
                         disabled={loadingAi[alert.id]}
                         className="mt-3 bg-primary text-base text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
                       >
-                        {loadingAi[alert.id] ? 'Thinking...' : '✦ Should I buy now?'}
+                        {loadingAi[alert.id] ? 'Afrifa is thinking...' : '✦ Ask Afrifa'}
                       </button>
                     )}
                   </div>
