@@ -5,12 +5,14 @@ import LearnTab from './components/LearnTab'
 import AdvisorTab from './components/AdvisorTab'
 import PortfolioTab from './components/PortfolioTab'
 import AlertsTab from './components/AlertsTab'
+import AppsTab from './components/AppsTab'
 
 const tabs = [
-  { id: 'learn', label: 'Learn', icon: '🎓' },
-  { id: 'advisor', label: 'Advisor', icon: '💡' },
-  { id: 'portfolio', label: 'Portfolio', icon: '📊' },
-  { id: 'alerts', label: 'Alerts', icon: '🔔' },
+  { id: 'learn', label: 'Learn' },
+  { id: 'advisor', label: 'Advisor' },
+  { id: 'portfolio', label: 'Portfolio' },
+  { id: 'alerts', label: 'Alerts' },
+  { id: 'apps', label: 'Apps' },
 ]
 
 export default function App() {
@@ -55,6 +57,7 @@ export default function App() {
             {activeTab === 'advisor'   && <AdvisorTab />}
             {activeTab === 'portfolio' && <PortfolioTab />}
             {activeTab === 'alerts'    && <AlertsTab />}
+            {activeTab === 'apps' && <AppsTab />}
           </div>
 
           {/* Bottom nav — mobile */}
