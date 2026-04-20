@@ -22,7 +22,6 @@ export default function App() {
   const [showInvestPopup, setShowInvestPopup] = useState(false)
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setScreen('main')
@@ -31,7 +30,6 @@ export default function App() {
       }
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setScreen('main')

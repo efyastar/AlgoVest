@@ -1,66 +1,111 @@
-import { useState } from 'react'
+import { supabase } from '../supabase'
+import { useState, useEffect } from 'react'
 
 const CURRENCIES: Record<string, string> = {
   USD: '$', GHS: '₵', EUR: '€', GBP: '£', NGN: '₦'
 }
 
 type Investment = {
-  id: number
+  id: string
   name: string
   amount: number
   currency: string
   date: string
   status: 'active' | 'closed'
-  closeAmount?: number
+  close_amount?: number
 }
 
 export default function PortfolioTab() {
   const [investments, setInvestments] = useState<Investment[]>([])
+  const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
-  const [closeId, setCloseId] = useState<number | null>(null)
+  const [closeId, setCloseId] = useState<string | null>(null)
   const [closeAmount, setCloseAmount] = useState('')
   const [aiSuggestion, setAiSuggestion] = useState('')
   const [loadingSuggestion, setLoadingSuggestion] = useState(false)
+
+  useEffect(() => {
+    fetchInvestments()
+  }, [])
+
+  const fetchInvestments = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('investments')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) setInvestments(data)
+    setLoading(false)
+  }
 
   const totalInvested = investments
     .filter(i => i.status === 'active')
     .reduce((sum, i) => sum + i.amount, 0)
 
-  const addInvestment = () => {
+  const addInvestment = async () => {
+    console.log('name:', name, 'amount:', amount)
     if (!name || !amount) return
-    setInvestments(prev => [...prev, {
-      id: Date.now(),
-      name,
-      amount: parseFloat(amount),
-      currency,
-      date: new Date().toLocaleDateString(),
-      status: 'active',
-    }])
-    setName('')
-    setAmount('')
-    setShowAdd(false)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    console.log('User:', user)
+    if (!user) return
+
+    const { data, error } = await supabase
+      .from('investments')
+      .insert({
+        user_id: user.id,
+        name,
+        amount: parseFloat(amount),
+        currency,
+        date: new Date().toLocaleDateString(),
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    console.log('Insert data:', data)
+    console.log('Insert error:', error)
+
+    if (!error && data) {
+      setInvestments(prev => [data, ...prev])
+      setName('')
+      setAmount('')
+      setShowAdd(false)
+    }
   }
 
-  const closeInvestment = (id: number) => {
+  const closeInvestment = async (id: string) => {
     if (!closeAmount) return
-    setInvestments(prev => prev.map(i =>
-      i.id === id
-        ? { ...i, status: 'closed', closeAmount: parseFloat(closeAmount) }
-        : i
-    ))
-    setCloseId(null)
-    setCloseAmount('')
+    const { error } = await supabase
+      .from('investments')
+      .update({ status: 'closed', close_amount: parseFloat(closeAmount) })
+      .eq('id', id)
+    if (!error) {
+      setInvestments(prev => prev.map(i =>
+        i.id === id
+          ? { ...i, status: 'closed', close_amount: parseFloat(closeAmount) }
+          : i
+      ))
+      setCloseId(null)
+      setCloseAmount('')
+    }
   }
 
   const getAISuggestion = async () => {
     setLoadingSuggestion(true)
     setAiSuggestion('')
     const activeInvestments = investments.filter(i => i.status === 'active')
+
+    if (activeInvestments.length === 0) {
+      setAiSuggestion('Add some investments first and Afrifa will review them for you!')
+      setLoadingSuggestion(false)
+      return
+    }
+
     const prompt = `A user has these active investments: ${activeInvestments.map(i => `${i.name} - ${CURRENCIES[i.currency]}${i.amount}`).join(', ')}. 
-    
     In 2-3 short sentences, suggest which one might not be growing well and what they could switch to instead. Be direct and specific.`
 
     try {
@@ -83,14 +128,25 @@ export default function PortfolioTab() {
     setLoadingSuggestion(false)
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-text-muted text-sm animate-pulse">Loading your portfolio...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full max-w-2xl mx-auto">
+      <button onClick={() => console.log('TEST CLICK WORKS')}>TEST</button>
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-surface border border-border rounded-xl p-4">
           <p className="text-text-muted text-xs mb-1">TOTAL INVESTED</p>
-          <p className="text-text-main text-2xl font-bold">${totalInvested.toLocaleString()}</p>
+          <p className="text-text-main text-2xl font-bold">
+            {totalInvested > 0 ? `$${totalInvested.toLocaleString()}` : '$0'}
+          </p>
         </div>
         <div className="bg-surface border border-border rounded-xl p-4">
           <p className="text-text-muted text-xs mb-1">POSITIONS</p>
@@ -100,24 +156,27 @@ export default function PortfolioTab() {
         </div>
       </div>
 
-      {/* AI Suggestion */}
+      {/* Afrifa Portfolio Review */}
       <div className="bg-surface border border-border rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-text-muted text-xs font-medium">AFRIFA\'S PORTFOLIO</p>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+              <span className="text-base text-xs font-bold">A</span>
+            </div>
+            <p className="text-text-muted text-xs font-medium">AFRIFA'S PORTFOLIO REVIEW</p>
+          </div>
           <button
             onClick={getAISuggestion}
             disabled={loadingSuggestion}
             className="text-primary text-xs font-medium disabled:opacity-50"
           >
-            {loadingSuggestion ? 'Afriafa is...' : '✦ Ask Afrifa'}
+            {loadingSuggestion ? 'Afrifa is thinking...' : '✦ Ask Afrifa'}
           </button>
         </div>
         {aiSuggestion ? (
           <p className="text-text-main text-sm leading-relaxed">{aiSuggestion}</p>
         ) : (
-          <p className="text-text-muted text-sm">
-            Ask Afrifa to review your portfolio
-          </p>
+          <p className="text-text-muted text-sm">Ask Afrifa to review your portfolio</p>
         )}
       </div>
 
@@ -181,7 +240,7 @@ export default function PortfolioTab() {
         )}
 
         {investments.map(inv => {
-          const pl = inv.closeAmount ? inv.closeAmount - inv.amount : null
+          const pl = inv.close_amount ? inv.close_amount - inv.amount : null
           const plPct = pl !== null ? ((pl / inv.amount) * 100).toFixed(1) : null
 
           return (
