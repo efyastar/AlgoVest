@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../supabase'
 
 export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void, onLogin: () => void }) {
   const [isSignUp, setIsSignUp] = useState(false)
@@ -6,9 +7,12 @@ export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void,
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setError('')
+    setMessage('')
 
     if (isSignUp && name.trim() === '') {
       setError('Please enter your full name')
@@ -31,11 +35,34 @@ export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void,
       return
     }
 
+    setLoading(true)
+
     if (isSignUp) {
-      onSignUp()
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name }
+        }
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage('Check your email to confirm your account, then sign in!')
+      }
     } else {
-      onLogin()
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        onLogin()
+      }
     }
+
+    setLoading(false)
   }
 
   return (
@@ -56,57 +83,48 @@ export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void,
         {/* Form */}
         <div className="bg-surface border border-border rounded-2xl p-6">
 
-          {/* Title */}
           <h2 className="text-text-main font-semibold text-lg mb-6">
             {isSignUp ? 'Create account' : 'Welcome back'}
           </h2>
 
-          {/* Name field - only shows on sign up */}
           {isSignUp && (
             <div className="mb-4">
-              <label className="text-text-muted text-xs font-medium mb-2 block">
-                FULL NAME
-              </label>
+              <label className="text-text-muted text-xs font-medium mb-2 block">FULL NAME</label>
               <input
                 type="text"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary transition-colors"
               />
             </div>
           )}
 
-          {/* Email */}
           <div className="mb-4">
-            <label className="text-text-muted text-xs font-medium mb-2 block">
-              EMAIL
-            </label>
+            <label className="text-text-muted text-xs font-medium mb-2 block">EMAIL</label>
             <input
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary transition-colors"
             />
           </div>
 
-          {/* Password */}
           <div className="mb-2">
-            <label className="text-text-muted text-xs font-medium mb-2 block">
-              PASSWORD
-            </label>
+            <label className="text-text-muted text-xs font-medium mb-2 block">PASSWORD</label>
             <input
               type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onKeyDown = {(e) => e.key == 'Enter' && e.preventDefault()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary transition-colors"
             />
           </div>
 
-          {/* Forgot password - only on login */}
           {!isSignUp && (
             <div className="flex justify-end mb-6">
               <button className="text-primary text-xs font-medium">
@@ -115,17 +133,15 @@ export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void,
             </div>
           )}
 
-          {/* Error message */}
-          {error !== '' && (
-            <p className="text-loss-text text-xs mt-3 mb-1">{error}</p>
-          )}
+          {error && <p className="text-loss-text text-xs mt-3 mb-1">{error}</p>}
+          {message && <p className="text-primary text-xs mt-3 mb-1">{message}</p>}
 
-          {/* Submit button */}
           <button
             onClick={handleSubmit}
-            className="w-full bg-primary hover:bg-primary-hover text-base font-semibold py-3 rounded-xl transition-colors mt-4"
+            disabled={loading}
+            className="w-full bg-primary hover:bg-primary-hover text-base font-semibold py-3 rounded-xl transition-colors mt-4 disabled:opacity-50"
           >
-            {isSignUp ? 'Create account' : 'Sign in'}
+            {loading ? 'Please wait...' : isSignUp ? 'Create account' : 'Sign in'}
           </button>
 
         </div>
@@ -159,6 +175,7 @@ export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void,
             onClick={() => {
               setIsSignUp(!isSignUp)
               setError('')
+              setMessage('')
               setEmail('')
               setPassword('')
               setName('')

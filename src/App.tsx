@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './supabase'
 import LoginPage from './components/LoginPage'
 import Onboarding from './components/Onboarding'
 import LearnTab from './components/LearnTab'
@@ -16,13 +17,46 @@ const tabs = [
 ]
 
 export default function App() {
-  const [screen, setScreen] = useState('login')
+  const [screen, setScreen] = useState('loading')
   const [activeTab, setActiveTab] = useState('learn')
   const [showInvestPopup, setShowInvestPopup] = useState(false)
+
+  useEffect(() => {
+    // Check if user is already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setScreen('main')
+      } else {
+        setScreen('login')
+      }
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setScreen('main')
+      } else {
+        setScreen('login')
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const handleLogin = () => {
     setScreen('main')
     setShowInvestPopup(true)
+  }
+
+  if (screen === 'loading') {
+    return (
+      <div className="min-h-screen bg-base flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <img src="/AlgoVest.png" alt="AlgoVest" className="w-16 h-16 object-contain animate-pulse" />
+          <p className="text-text-muted text-sm">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -43,12 +77,23 @@ export default function App() {
         <div className="w-full min-h-screen flex flex-col">
 
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
-            <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
-            <div>
-              <h1 className="text-sm font-semibold text-text-main">AlgoVest</h1>
-              <p className="text-xs text-text-muted">smart investing for everyone</p>
+          <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
+              <div>
+                <h1 className="text-sm font-semibold text-text-main">AlgoVest</h1>
+                <p className="text-xs text-text-muted">smart investing for everyone</p>
+              </div>
             </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut()
+                setScreen('login')
+              }}
+              className="text-text-muted text-xs hover:text-loss-text transition-colors"
+            >
+              Sign out
+            </button>
           </div>
 
           {/* Tab content */}
@@ -57,7 +102,7 @@ export default function App() {
             {activeTab === 'advisor'   && <AdvisorTab />}
             {activeTab === 'portfolio' && <PortfolioTab />}
             {activeTab === 'alerts'    && <AlertsTab />}
-            {activeTab === 'apps' && <AppsTab />}
+            {activeTab === 'apps'      && <AppsTab />}
           </div>
 
           {/* Bottom nav — mobile */}
@@ -72,14 +117,13 @@ export default function App() {
                     : 'text-text-muted'
                 }`}
               >
-                <span className="text-lg">{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
           </div>
 
           {/* Top nav — tablet/desktop */}
-          <div className="hidden md:flex fixed top-0 right-0 gap-1 p-4 z-10">
+          <div className="hidden md:flex fixed top-0 right-16 gap-1 p-4 z-10">
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -90,7 +134,6 @@ export default function App() {
                     : 'text-text-muted hover:text-text-main hover:bg-elevated'
                 }`}
               >
-                <span>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
