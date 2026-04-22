@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { supabase } from '../supabase'
+import { useState, useEffect } from 'react'
 
 const CURRENCIES: Record<string, string> = {
   USD: '$', GHS: '₵', EUR: '€', GBP: '£', NGN: '₦'
@@ -50,6 +51,18 @@ export default function AdvisorTab() {
   const [savedPlans, setSavedPlans] = useState<Plan[]>([])
   const [view, setView] = useState<'form' | 'plans'>('form')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+  fetchSavedPlans()
+}, [])
+
+const fetchSavedPlans = async () => {
+  const { data, error } = await supabase
+    .from('saved_plans')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (!error && data) setSavedPlans(data)
+  }
 
   const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']
 
@@ -107,19 +120,33 @@ Rules:
     setLoading(false)
   }
 
-  const savePlan = () => {
-    if (!result) return
-    const plan: Plan = {
-      id: Date.now(),
+  const savePlan = async () => {
+  if (!result) return
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data, error } = await supabase
+    .from('saved_plans')
+    .insert({
+      user_id: user.id,
       budget: parseFloat(budget),
       currency,
       risk,
       goal,
-      ...result,
-      date: new Date().toLocaleDateString()
-    }
-    setSavedPlans(prev => [plan, ...prev])
+      allocations: result.allocations,
+      summary: result.summary,
+      date: new Date().toLocaleDateString(),
+    })
+    .select()
+    .single()
+
+  console.log('Saved plan:', data, error)
+
+  if (!error) {
+    setSavedPlans(prev => [{ id: Date.now(), budget: parseFloat(budget), currency, risk, goal, ...result, date: new Date().toLocaleDateString() }, ...prev])
     setView('plans')
+    }
   }
 
   const getPlatforms = (allocations: Allocation[]) => {
@@ -259,10 +286,10 @@ Rules:
               {loading ? (
                 <>
                   <span className="animate-spin">⟳</span>
-                  AI is thinking...
+                  Afrifa is thinking...
                 </>
               ) : (
-                '✦ Get AI Suggestion'
+                '✦ Get Afrifa\'s suggestion'
               )}
             </button>
           </div>
