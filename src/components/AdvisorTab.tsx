@@ -1,5 +1,5 @@
-import { supabase } from '../supabase'
 import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 
 const CURRENCIES: Record<string, string> = {
   USD: '$', GHS: '₵', EUR: '€', GBP: '£', NGN: '₦'
@@ -53,21 +53,32 @@ export default function AdvisorTab() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-  fetchSavedPlans()
-}, [])
+    fetchSavedPlans()
+    fetchProfile()
+  }, [])
 
-const fetchSavedPlans = async () => {
-  const { data, error } = await supabase
-    .from('saved_plans')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (!error && data) setSavedPlans(data)
+  const fetchProfile = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('currency, risk_level')
+      .single()
+    if (data) {
+      setCurrency(data.currency)
+      setRisk(data.risk_level)
+    }
+  }
+
+  const fetchSavedPlans = async () => {
+    const { data, error } = await supabase
+      .from('saved_plans')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) setSavedPlans(data)
   }
 
   const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']
 
   const getAISuggestion = async () => {
-    console.log('Key starts with:', import.meta.env.VITE_GEMINI_API_KEY?.slice(0, 8))
     if (!budget || parseFloat(budget) <= 0) {
       setError('Please enter a valid budget')
       return
@@ -76,7 +87,7 @@ const fetchSavedPlans = async () => {
     setLoading(true)
     setResult(null)
 
-    const prompt = `You are a financial advisor. A user wants to invest ${CURRENCIES[currency]}${budget} with a ${risk} risk tolerance. Their goal is ${goal}.
+    const prompt = `You are Afrifa, a friendly and knowledgeable financial advisor. A user wants to invest ${CURRENCIES[currency]}${budget} with a ${risk} risk tolerance. Their goal is ${goal}.
 
 Respond ONLY with a JSON object, no markdown, no backticks:
 {
@@ -84,7 +95,7 @@ Respond ONLY with a JSON object, no markdown, no backticks:
     {"name": "Asset name (ticker)", "percentage": 40, "reason": "1 line reason", "type": "stocks|crypto|etfs"},
     ...
   ],
-  "summary": "2-3 sentence strategy explanation"
+  "summary": "2-3 sentence strategy explanation written as Afrifa speaking directly to the user"
 }
 
 Rules:
@@ -101,51 +112,45 @@ Rules:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }]
+            contents: [{ parts: [{ text: prompt }] }]
           })
         }
       )
       const data = await resp.json()
-      console.log('Gemini response:', data)
       let text = data.candidates[0].content.parts[0].text
       text = text.replace(/```json|```/g, '').trim()
       const parsed = JSON.parse(text)
       setResult(parsed)
     } catch (e) {
-      console.error('Error:', e)
-      setError('Something went wrong. Please try again.')
+      setError('Afrifa is unavailable right now. Please try again.')
     }
     setLoading(false)
   }
 
   const savePlan = async () => {
-  if (!result) return
+    if (!result) return
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-  const { data, error } = await supabase
-    .from('saved_plans')
-    .insert({
-      user_id: user.id,
-      budget: parseFloat(budget),
-      currency,
-      risk,
-      goal,
-      allocations: result.allocations,
-      summary: result.summary,
-      date: new Date().toLocaleDateString(),
-    })
-    .select()
-    .single()
+    const { data, error } = await supabase
+      .from('saved_plans')
+      .insert({
+        user_id: user.id,
+        budget: parseFloat(budget),
+        currency,
+        risk,
+        goal,
+        allocations: result.allocations,
+        summary: result.summary,
+        date: new Date().toLocaleDateString(),
+      })
+      .select()
+      .single()
 
-  console.log('Saved plan:', data, error)
-
-  if (!error) {
-    setSavedPlans(prev => [{ id: Date.now(), budget: parseFloat(budget), currency, risk, goal, ...result, date: new Date().toLocaleDateString() }, ...prev])
-    setView('plans')
+    if (!error && data) {
+      setSavedPlans(prev => [data, ...prev])
+      setView('plans')
     }
   }
 
@@ -176,7 +181,7 @@ Rules:
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          💡 Get Suggestion
+          ✦ Ask Afrifa
         </button>
         <button
           onClick={() => setView('plans')}
@@ -186,7 +191,7 @@ Rules:
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          📋 Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
+          📋 Afrifa's Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
         </button>
       </div>
 
@@ -198,7 +203,7 @@ Rules:
             {/* Budget input */}
             <div className="mb-5">
               <label className="text-text-muted text-xs font-medium mb-2 block">
-                HOW MUCH TO INVEST
+                HOW MUCH DO YOU WANT TO INVEST?
               </label>
               <div className="flex gap-2">
                 <select
@@ -289,7 +294,7 @@ Rules:
                   Afrifa is thinking...
                 </>
               ) : (
-                '✦ Get Afrifa\'s suggestion'
+                '✦ Ask Afrifa'
               )}
             </button>
           </div>
@@ -298,9 +303,16 @@ Rules:
           {result && (
             <div className="bg-surface border border-border rounded-2xl p-5">
 
-              <h3 className="text-text-main font-semibold mb-4">
-                Your Portfolio Plan — {CURRENCIES[currency]}{budget}
-              </h3>
+              {/* Afrifa header */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                  <span className="text-base text-sm font-bold">A</span>
+                </div>
+                <div>
+                  <p className="text-text-main font-semibold text-sm">Afrifa's Recommendation</p>
+                  <p className="text-text-muted text-xs">for {CURRENCIES[currency]}{budget}</p>
+                </div>
+              </div>
 
               <div className="flex flex-col gap-3 mb-5">
                 {result.allocations.map((item, i) => (
@@ -331,12 +343,17 @@ Rules:
               </div>
 
               <div className="bg-elevated rounded-xl p-4 mb-5">
-                <p className="text-text-muted text-xs font-medium mb-1">AI STRATEGY SUMMARY</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                    <span className="text-base text-xs font-bold">A</span>
+                  </div>
+                  <p className="text-text-muted text-xs font-medium">AFRIFA SAYS</p>
+                </div>
                 <p className="text-text-main text-sm leading-relaxed">{result.summary}</p>
               </div>
 
               <div className="mb-5">
-                <p className="text-text-muted text-xs font-medium mb-3">WHERE TO BUY THESE</p>
+                <p className="text-text-muted text-xs font-medium mb-3">WHERE AFRIFA SUGGESTS YOU BUY</p>
                 <div className="grid grid-cols-2 gap-2">
                   {getPlatforms(result.allocations).map((p, i) => (
                     <button
@@ -355,7 +372,7 @@ Rules:
                 onClick={savePlan}
                 className="w-full border border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary-tint transition-colors"
               >
-                Save this plan
+                Save Afrifa's plan
               </button>
 
             </div>
@@ -368,35 +385,37 @@ Rules:
         <div>
           {savedPlans.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-4xl mb-3">📋</p>
+              <div className="w-16 h-16 rounded-full bg-primary-tint flex items-center justify-center mx-auto mb-4">
+                <span className="text-primary text-2xl font-bold">A</span>
+              </div>
               <p className="text-text-main font-medium mb-1">No saved plans yet</p>
-              <p className="text-text-muted text-sm">Get an AI suggestion and save it here</p>
+              <p className="text-text-muted text-sm">Ask Afrifa for a suggestion and save it here</p>
               <button
                 onClick={() => setView('form')}
                 className="mt-4 bg-primary text-base px-6 py-2.5 rounded-xl text-sm font-semibold"
               >
-                Get a suggestion
+                Ask Afrifa
               </button>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {savedPlans.map((plan) => (
-                <div key={plan.id} className="bg-surface border border-border rounded-2xl p-5">
+              {savedPlans.map((plan, idx) => (
+                <div key={idx} className="bg-surface border border-border rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="text-text-main font-semibold">
-                        {CURRENCIES[plan.currency]}{plan.budget.toLocaleString()}
+                        {CURRENCIES[plan.currency]}{plan.budget?.toLocaleString()}
                       </p>
                       <p className="text-text-muted text-xs mt-0.5">
                         {plan.date} · {plan.risk} risk · {plan.goal}
                       </p>
                     </div>
                     <span className="text-xs bg-primary-tint text-primary px-3 py-1 rounded-full font-medium">
-                      {plan.allocations.length} assets
+                      {plan.allocations?.length} assets
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    {plan.allocations.map((a, i) => (
+                    {plan.allocations?.map((a, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0"

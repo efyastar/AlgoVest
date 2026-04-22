@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../supabase'
 
 const STEPS = [
   'New to investing?',
@@ -14,16 +15,35 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
   const [currency, setCurrency] = useState('')
   const [risk, setRisk] = useState('')
   const [budget, setBudget] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const goNext = () => {
+  const goNext = async () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(prev => prev + 1)
     } else {
-      onFinish()
+      await saveProfile()
     }
   }
 
   const goBack = () => setCurrentStep(prev => prev - 1)
+
+  const saveProfile = async () => {
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        currency: currency || 'USD',
+        risk_level: risk || 'moderate',
+        is_new_to_investing: isNewToInvesting ?? true,
+        budget_goal: budget ? parseFloat(budget) : null,
+      })
+    }
+
+    setSaving(false)
+    onFinish()
+  }
 
   const progress = ((currentStep + 1) / STEPS.length) * 100
 
@@ -136,7 +156,7 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
               Set your risk level
             </h2>
             <p className="text-text-muted text-sm mb-8">
-              This affects which investments we suggest for you
+              This affects which investments Afrifa suggests for you
             </p>
             <div className="flex flex-col gap-3">
               {[
@@ -191,40 +211,40 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
             <div className="flex flex-col gap-3">
               {[
                 {
-                    title: "The Only Investing Video You'll Ever Need",
-                    channel: 'Mark Tilbury',
-                    url: 'https://youtu.be/Ay4fmZdZqJE',
-                    id: 'Ay4fmZdZqJE'
+                  title: "The Only Investing Video You'll Ever Need",
+                  channel: 'Mark Tilbury',
+                  url: 'https://youtu.be/Ay4fmZdZqJE',
+                  id: 'Ay4fmZdZqJE'
                 },
                 {
-                    title: "How to Invest for Beginners (2026)",
-                    channel: 'Ali Abdaal',
-                    url: 'https://youtu.be/lNdOtlpmH5U',
-                    id: 'lNdOtlpmH5U'
+                  title: "How to Invest for Beginners (2026)",
+                  channel: 'Ali Abdaal',
+                  url: 'https://youtu.be/lNdOtlpmH5U',
+                  id: 'lNdOtlpmH5U'
                 },
                 {
-                    title: "Stock Market for Beginners — The Ultimate Guide",
-                    channel: 'Humphrey Yang',
-                    url: 'https://youtu.be/bb6_M_srMBk',
-                    id: 'bb6_M_srMBk'
+                  title: "Stock Market for Beginners — The Ultimate Guide",
+                  channel: 'Humphrey Yang',
+                  url: 'https://youtu.be/bb6_M_srMBk',
+                  id: 'bb6_M_srMBk'
                 },
-                ].map((v, i) => (
+              ].map((v, i) => (
                 <button
-                    key={i}
-                    onClick={() => window.open(v.url, '_blank')}
-                    className="w-full border border-border bg-elevated rounded-xl overflow-hidden flex hover:border-primary transition-all"
+                  key={i}
+                  onClick={() => window.open(v.url, '_blank')}
+                  className="w-full border border-border bg-elevated rounded-xl overflow-hidden flex hover:border-primary transition-all"
                 >
-                    <img
+                  <img
                     src={`https://img.youtube.com/vi/${v.id}/mqdefault.jpg`}
                     alt={v.title}
                     className="w-24 h-16 object-cover flex-shrink-0"
-                    />
-                    <div className="p-3 text-left">
+                  />
+                  <div className="p-3 text-left">
                     <div className="text-text-main text-xs font-medium leading-snug line-clamp-2">{v.title}</div>
                     <div className="text-text-muted text-xs mt-1">{v.channel}</div>
-                    </div>
+                  </div>
                 </button>
-                ))}
+              ))}
               <p className="text-text-hint text-xs text-center mt-2">
                 Tap any video to watch · or skip for now
               </p>
@@ -279,9 +299,10 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
         </button>
         <button
           onClick={goNext}
-          className="bg-primary hover:bg-primary-hover text-base font-semibold px-8 py-3 rounded-xl transition-colors"
+          disabled={saving}
+          className="bg-primary hover:bg-primary-hover text-base font-semibold px-8 py-3 rounded-xl transition-colors disabled:opacity-50"
         >
-          {currentStep === STEPS.length - 1 ? 'Finish ✓' : 'Continue →'}
+          {saving ? 'Saving...' : currentStep === STEPS.length - 1 ? 'Finish ✓' : 'Continue →'}
         </button>
       </div>
 
