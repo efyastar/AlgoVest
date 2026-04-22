@@ -191,7 +191,7 @@ Rules:
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          📋 Afrifa's Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
+          Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
         </button>
       </div>
 
@@ -243,9 +243,9 @@ Rules:
               </label>
               <div className="flex gap-2">
                 {[
-                  { value: 'conservative', label: '🛡️ Safe' },
-                  { value: 'moderate', label: '⚖️ Balanced' },
-                  { value: 'aggressive', label: '🚀 Bold' },
+                  { value: 'conservative', label: 'Safe' },
+                  { value: 'moderate', label: 'Balanced' },
+                  { value: 'aggressive', label: 'Bold' },
                 ].map(r => (
                   <button
                     key={r.value}
@@ -372,7 +372,7 @@ Rules:
                 onClick={savePlan}
                 className="w-full border border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary-tint transition-colors"
               >
-                Save Afrifa's plan
+                Save plan
               </button>
 
             </div>

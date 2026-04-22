@@ -1,90 +1,184 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 
 type Alert = {
-  id: number
+  id: string
   asset: string
   ticker: string
   threshold: number
   currency: string
-  currentPrice: string
+  current_price: string
   enabled: boolean
-  fired?: boolean
-  firedMessage?: string
+  fired: boolean
+  fired_message?: string
 }
 
-export default function AlertsTab() {
-  const [alerts, setAlerts] = useState<Alert[]>([
-    {
-      id: 1,
-      asset: 'Bitcoin',
-      ticker: 'BTC',
-      threshold: 5,
-      currency: 'USD',
-      currentPrice: '$83,400',
-      enabled: true,
-      fired: true,
-      firedMessage: 'Bitcoin dropped 6.2% in the last 24 hours — now at $78,200',
-    },
-    {
-      id: 2,
-      asset: 'Ethereum',
-      ticker: 'ETH',
-      threshold: 8,
-      currency: 'USD',
-      currentPrice: '$3,180',
-      enabled: true,
-      fired: false,
-    },
-    {
-      id: 3,
-      asset: 'S&P 500',
-      ticker: 'SPY',
-      threshold: 3,
-      currency: 'USD',
-      currentPrice: '$506.30',
-      enabled: true,
-      fired: false,
-    },
-    {
-      id: 4,
-      asset: 'NASDAQ 100',
-      ticker: 'QQQ',
-      threshold: 4,
-      currency: 'USD',
-      currentPrice: '$18,200',
-      enabled: false,
-      fired: false,
-    },
-    {
-      id: 5,
-      asset: 'Gold',
-      ticker: 'XAU',
-      threshold: 2,
-      currency: 'USD',
-      currentPrice: '$2,340',
-      enabled: false,
-      fired: false,
-    },
-  ])
+const DEFAULT_ALERTS = [
+  {
+    asset: 'Bitcoin',
+    ticker: 'BTC',
+    threshold: 5,
+    currency: 'USD',
+    current_price: '$83,400',
+    enabled: true,
+    fired: false,
+  },
+]
 
-  const [aiResponse, setAiResponse] = useState<Record<number, string>>({})
-  const [loadingAi, setLoadingAi] = useState<Record<number, boolean>>({})
+export default function AlertsTab() {
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [loading, setLoading] = useState(true)
+  const [aiResponse, setAiResponse] = useState<Record<string, string>>({})
+  const [loadingAi, setLoadingAi] = useState<Record<string, boolean>>({})
   const [showAdd, setShowAdd] = useState(false)
   const [newAsset, setNewAsset] = useState('')
   const [newTicker, setNewTicker] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
 
-  const toggleAlert = (id: number) => {
-    setAlerts(prev =>
-      prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a)
-    )
+  useEffect(() => {
+    fetchAlerts()
+  }, [])
+
+  useEffect(() => {
+    if (alerts.length > 0) {
+      fetchLivePrices()
+    }
+  }, [alerts.length])
+
+  const fetchAlerts = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (!error && data && data.length > 0) {
+      setAlerts(data)
+    } else {
+      await seedDefaultAlerts()
+    }
+    setLoading(false)
+  }
+
+  const seedDefaultAlerts = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const toInsert = DEFAULT_ALERTS.map(a => ({ ...a, user_id: user.id }))
+    const { data, error } = await supabase
+      .from('alerts')
+      .insert(toInsert)
+      .select()
+
+    if (!error && data) setAlerts(data)
+  }
+
+  const fetchLivePrices = async () => {
+    const cryptoMap: Record<string, string> = {
+      BTC: 'bitcoin',
+      ETH: 'ethereum',
+      BNB: 'binancecoin',
+      SOL: 'solana',
+      XRP: 'ripple',
+    }
+
+    const tickers = alerts
+      .filter(a => cryptoMap[a.ticker])
+      .map(a => cryptoMap[a.ticker])
+
+    if (tickers.length === 0) return
+
+    try {
+      const resp = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${tickers.join(',')}&vs_currencies=usd&include_24hr_change=true`
+      )
+      const data = await resp.json()
+
+      const updatedAlerts = await Promise.all(alerts.map(async alert => {
+        const coinId = cryptoMap[alert.ticker]
+        if (!coinId || !data[coinId]) return alert
+
+        const price = data[coinId].usd
+        const change24h = data[coinId].usd_24h_change
+
+        const newPrice = `$${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+        const fired = change24h <= -alert.threshold
+        const firedMessage = fired
+          ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in the last 24 hours — now at ${newPrice}`
+          : alert.fired_message
+
+        if (newPrice !== alert.current_price || fired !== alert.fired) {
+          await supabase
+            .from('alerts')
+            .update({
+              current_price: newPrice,
+              fired,
+              fired_message: firedMessage || null,
+            })
+            .eq('id', alert.id)
+        }
+
+        return {
+          ...alert,
+          current_price: newPrice,
+          fired,
+          fired_message: firedMessage,
+        }
+      }))
+
+      setAlerts(updatedAlerts as Alert[])
+    } catch (e) {
+      console.error('Price fetch failed:', e)
+    }
+  }
+
+  const toggleAlert = async (id: string, current: boolean) => {
+    const { error } = await supabase
+      .from('alerts')
+      .update({ enabled: !current })
+      .eq('id', id)
+
+    if (!error) {
+      setAlerts(prev =>
+        prev.map(a => a.id === id ? { ...a, enabled: !current } : a)
+      )
+    }
+  }
+
+  const addCustomAlert = async () => {
+    if (!newAsset || !newTicker || !newThreshold) return
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data, error } = await supabase
+      .from('alerts')
+      .insert({
+        user_id: user.id,
+        asset: newAsset,
+        ticker: newTicker.toUpperCase(),
+        threshold: parseFloat(newThreshold),
+        currency: 'USD',
+        current_price: 'N/A',
+        enabled: true,
+        fired: false,
+      })
+      .select()
+      .single()
+
+    if (!error && data) {
+      setAlerts(prev => [...prev, data])
+      setNewAsset('')
+      setNewTicker('')
+      setNewThreshold('')
+      setShowAdd(false)
+    }
   }
 
   const askAI = async (alert: Alert) => {
     setLoadingAi(prev => ({ ...prev, [alert.id]: true }))
-    const prompt = `${alert.asset} (${alert.ticker}) just dropped ${alert.threshold}% and is now at ${alert.currentPrice}. 
-    
-    In 2-3 short sentences, should a moderate risk investor buy now or wait? Be direct and specific.`
+    const prompt = `${alert.asset} (${alert.ticker}) just dropped ${alert.threshold}% and is now at ${alert.current_price}. 
+    In 2-3 short sentences, should a moderate risk investor buy now or wait? Be direct and specific. Respond as Afrifa, a friendly financial advisor.`
 
     try {
       const resp = await fetch(
@@ -101,30 +195,20 @@ export default function AlertsTab() {
       const text = data.candidates[0].content.parts[0].text
       setAiResponse(prev => ({ ...prev, [alert.id]: text }))
     } catch (e) {
-      setAiResponse(prev => ({ ...prev, [alert.id]: 'Could not load suggestion. Try again.' }))
+      setAiResponse(prev => ({ ...prev, [alert.id]: 'Afrifa is unavailable right now. Try again.' }))
     }
     setLoadingAi(prev => ({ ...prev, [alert.id]: false }))
   }
 
-  const addCustomAlert = () => {
-    if (!newAsset || !newTicker || !newThreshold) return
-    setAlerts(prev => [...prev, {
-      id: Date.now(),
-      asset: newAsset,
-      ticker: newTicker.toUpperCase(),
-      threshold: parseFloat(newThreshold),
-      currency: 'USD',
-      currentPrice: 'N/A',
-      enabled: true,
-      fired: false,
-    }])
-    setNewAsset('')
-    setNewTicker('')
-    setNewThreshold('')
-    setShowAdd(false)
-  }
-
   const firedAlerts = alerts.filter(a => a.fired && a.enabled)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-text-muted text-sm animate-pulse">Loading your alerts...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -144,11 +228,16 @@ export default function AlertsTab() {
                     <span className="text-base text-xs font-bold">{alert.ticker}</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-text-main text-sm font-medium">{alert.firedMessage}</p>
-                    <p className="text-text-muted text-xs mt-1">Current price: {alert.currentPrice}</p>
+                    <p className="text-text-main text-sm font-medium">{alert.fired_message}</p>
+                    <p className="text-text-muted text-xs mt-1">Current price: {alert.current_price}</p>
                     {aiResponse[alert.id] ? (
                       <div className="mt-3 bg-elevated rounded-lg p-3">
-                        <p className="text-text-muted text-xs font-medium mb-1">AFRIFA SAYS</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                            <span className="text-base text-xs font-bold">A</span>
+                          </div>
+                          <p className="text-text-muted text-xs font-medium">AFRIFA SAYS</p>
+                        </div>
                         <p className="text-text-main text-xs leading-relaxed">{aiResponse[alert.id]}</p>
                       </div>
                     ) : (
@@ -184,11 +273,11 @@ export default function AlertsTab() {
             <div className="flex-1">
               <p className="text-text-main text-sm font-medium">{alert.asset}</p>
               <p className="text-text-muted text-xs mt-0.5">
-                Alert if drops {alert.threshold}% · {alert.currentPrice}
+                Alert if drops {alert.threshold}% · {alert.current_price}
               </p>
             </div>
             <button
-              onClick={() => toggleAlert(alert.id)}
+              onClick={() => toggleAlert(alert.id, alert.enabled)}
               className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
                 alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
               }`}
@@ -254,7 +343,7 @@ export default function AlertsTab() {
       )}
 
       <p className="text-text-hint text-xs text-center mt-4">
-        Live price checking coming soon · alerts will notify you via email and SMS
+        Prices update when you open this tab · email and SMS alerts coming soon
       </p>
 
     </div>

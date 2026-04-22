@@ -20,11 +20,14 @@ export default function App() {
   const [screen, setScreen] = useState('loading')
   const [activeTab, setActiveTab] = useState('learn')
   const [showInvestPopup, setShowInvestPopup] = useState(false)
+  const [userName, setUserName] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setScreen('main')
+        const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
+        setUserName(name)
       } else {
         setScreen('login')
       }
@@ -33,8 +36,11 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setScreen('main')
+        const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
+        setUserName(name)
       } else {
         setScreen('login')
+        setUserName('')
       }
     })
 
@@ -79,7 +85,9 @@ export default function App() {
             <div className="flex items-center gap-3">
               <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
               <div>
-                <h1 className="text-sm font-semibold text-text-main">AlgoVest</h1>
+                <h1 className="text-sm font-semibold text-text-main">
+                  Hey, {userName} 👋
+                </h1>
                 <p className="text-xs text-text-muted">smart investing for everyone</p>
               </div>
             </div>
