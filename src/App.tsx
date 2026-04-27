@@ -23,12 +23,34 @@ export default function App() {
   const [userName, setUserName] = useState('')
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Logout when tab/browser is closed
+    window.addEventListener('beforeunload', async () => {
+      await supabase.auth.signOut()
+      localStorage.removeItem('loginTime')
+    })
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
+        const loginTime = localStorage.getItem('loginTime')
+        const now = Date.now()
+
+        // Auto logout after 1 hour
+        if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
+          await supabase.auth.signOut()
+          localStorage.removeItem('loginTime')
+          setScreen('login')
+          return
+        }
+
+        if (!loginTime) {
+          localStorage.setItem('loginTime', now.toString())
+        }
+
         setScreen('main')
         const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
         setUserName(name)
       } else {
+        localStorage.removeItem('loginTime')
         setScreen('login')
       }
     })
@@ -44,10 +66,14 @@ export default function App() {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('beforeunload', () => {})
+    }
   }, [])
 
   const handleLogin = () => {
+    localStorage.setItem('loginTime', Date.now().toString())
     setScreen('main')
     setShowInvestPopup(true)
   }
@@ -94,6 +120,7 @@ export default function App() {
             <button
               onClick={async () => {
                 await supabase.auth.signOut()
+                localStorage.removeItem('loginTime')
                 setScreen('login')
               }}
               className="text-text-muted text-xs hover:text-loss-text transition-colors"
