@@ -34,16 +34,17 @@ export default function AlertsTab() {
   const [newAsset, setNewAsset] = useState('')
   const [newTicker, setNewTicker] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
+  const [fetchingPrices, setFetchingPrices] = useState(false)
 
   useEffect(() => {
     fetchAlerts()
   }, [])
 
   useEffect(() => {
-    if (alerts.length > 0) {
+    if (!loading && alerts.length > 0) {
       fetchLivePrices()
     }
-  }, [alerts.length])
+  }, [loading])
 
   const fetchAlerts = async () => {
     setLoading(true)
@@ -73,7 +74,11 @@ export default function AlertsTab() {
     if (!error && data) setAlerts(data)
   }
 
-  const fetchLivePrices = async () => {
+  const fetchLivePrices = async (currentAlerts?: Alert[]) => {
+    const alertsToUse = currentAlerts || alerts
+    if (alertsToUse.length === 0) return
+
+    setFetchingPrices(true)
     const cryptoMap: Record<string, string> = {
       BTC: 'bitcoin',
       ETH: 'ethereum',
@@ -82,54 +87,91 @@ export default function AlertsTab() {
       XRP: 'ripple',
     }
 
-    const tickers = alerts
+    const cryptoTickers = alertsToUse
       .filter(a => cryptoMap[a.ticker])
       .map(a => cryptoMap[a.ticker])
 
-    if (tickers.length === 0) return
+    const stockAlerts = alertsToUse.filter(a => !cryptoMap[a.ticker])
 
-    try {
-      const resp = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${tickers.join(',')}&vs_currencies=usd&include_24hr_change=true`
-      )
-      const data = await resp.json()
-
-      const updatedAlerts = await Promise.all(alerts.map(async alert => {
-        const coinId = cryptoMap[alert.ticker]
-        if (!coinId || !data[coinId]) return alert
-
-        const price = data[coinId].usd
-        const change24h = data[coinId].usd_24h_change
-
-        const newPrice = `$${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-        const fired = change24h <= -alert.threshold
-        const firedMessage = fired
-          ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in the last 24 hours — now at ${newPrice}`
-          : alert.fired_message
-
-        if (newPrice !== alert.current_price || fired !== alert.fired) {
-          await supabase
-            .from('alerts')
-            .update({
-              current_price: newPrice,
-              fired,
-              fired_message: firedMessage || null,
-            })
-            .eq('id', alert.id)
-        }
-
-        return {
-          ...alert,
-          current_price: newPrice,
-          fired,
-          fired_message: firedMessage,
-        }
-      }))
-
-      setAlerts(updatedAlerts as Alert[])
-    } catch (e) {
-      console.error('Price fetch failed:', e)
+    let cryptoData: Record<string, { usd: number, usd_24h_change: number }> = {}
+    if (cryptoTickers.length > 0) {
+      try {
+        const resp = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoTickers.join(',')}&vs_currencies=usd&include_24hr_change=true`
+        )
+        cryptoData = await resp.json()
+      } catch (e) {
+        console.error('Crypto fetch failed:', e)
+      }
     }
+
+    const stockData: Record<string, { price: number, change: number }> = {}
+    for (const alert of stockAlerts) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1200))
+        const resp = await fetch(
+          `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${alert.ticker}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`
+        )
+        const data = await resp.json()
+        console.log(`Stock data for ${alert.ticker}:`, data)
+        const quote = data['Global Quote']
+        if (quote && quote['05. price']) {
+          stockData[alert.ticker] = {
+            price: parseFloat(quote['05. price']),
+            change: parseFloat(quote['10. change percent'].replace('%', '')),
+          }
+        }
+      } catch (e) {
+        console.error(`Stock fetch failed for ${alert.ticker}:`, e)
+      }
+    }
+
+    const updatedAlerts = await Promise.all(alertsToUse.map(async alert => {
+      const coinId = cryptoMap[alert.ticker]
+      let newPrice = alert.current_price
+      let change24h = 0
+      let gotData = false
+
+      if (coinId && cryptoData[coinId]) {
+        const price = cryptoData[coinId].usd
+        change24h = cryptoData[coinId].usd_24h_change
+        newPrice = `$${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+        gotData = true
+      } else if (stockData[alert.ticker]) {
+        const price = stockData[alert.ticker].price
+        change24h = stockData[alert.ticker].change
+        newPrice = `$${price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+        gotData = true
+      }
+
+      if (!gotData) return alert
+
+      const fired = change24h <= -alert.threshold
+      const firedMessage = fired
+        ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in the last 24 hours — now at ${newPrice}`
+        : alert.fired_message
+
+      if (newPrice !== alert.current_price || fired !== alert.fired) {
+        await supabase
+          .from('alerts')
+          .update({
+            current_price: newPrice,
+            fired,
+            fired_message: firedMessage || null,
+          })
+          .eq('id', alert.id)
+      }
+
+      return {
+        ...alert,
+        current_price: newPrice,
+        fired,
+        fired_message: firedMessage,
+      }
+    }))
+
+    setAlerts(updatedAlerts as Alert[])
+    setFetchingPrices(false)
   }
 
   const toggleAlert = async (id: string, current: boolean) => {
@@ -142,6 +184,17 @@ export default function AlertsTab() {
       setAlerts(prev =>
         prev.map(a => a.id === id ? { ...a, enabled: !current } : a)
       )
+    }
+  }
+
+  const deleteAlert = async (id: string) => {
+    const { error } = await supabase
+      .from('alerts')
+      .delete()
+      .eq('id', id)
+
+    if (!error) {
+      setAlerts(prev => prev.filter(a => a.id !== id))
     }
   }
 
@@ -159,7 +212,7 @@ export default function AlertsTab() {
         ticker: newTicker.toUpperCase(),
         threshold: parseFloat(newThreshold),
         currency: 'USD',
-        current_price: 'N/A',
+        current_price: 'Fetching...',
         enabled: true,
         fired: false,
       })
@@ -167,11 +220,13 @@ export default function AlertsTab() {
       .single()
 
     if (!error && data) {
-      setAlerts(prev => [...prev, data])
+      const newAlerts = [...alerts, data]
+      setAlerts(newAlerts)
       setNewAsset('')
       setNewTicker('')
       setNewThreshold('')
       setShowAdd(false)
+      fetchLivePrices(newAlerts)
     }
   }
 
@@ -258,7 +313,13 @@ export default function AlertsTab() {
       )}
 
       {/* Alert list */}
-      <p className="text-text-muted text-xs font-medium mb-3">WATCHING</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-text-muted text-xs font-medium">WATCHING</p>
+        {fetchingPrices && (
+          <p className="text-text-muted text-xs animate-pulse">Updating prices...</p>
+        )}
+      </div>
+
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {alerts.map((alert, index) => (
           <div
@@ -276,18 +337,26 @@ export default function AlertsTab() {
                 Alert if drops {alert.threshold}% · {alert.current_price}
               </p>
             </div>
-            <button
-              onClick={() => toggleAlert(alert.id, alert.enabled)}
-              className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
-                alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
-                  alert.enabled ? 'left-5' : 'left-1'
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleAlert(alert.id, alert.enabled)}
+                className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
+                  alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
                 }`}
-              />
-            </button>
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
+                    alert.enabled ? 'left-5' : 'left-1'
+                  }`}
+                />
+              </button>
+              <button
+                onClick={() => deleteAlert(alert.id)}
+                className="text-text-hint hover:text-loss-text text-sm transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         ))}
       </div>
