@@ -5,6 +5,7 @@ const STEPS = [
   'New to investing?',
   'Pick your currency',
   'Set your risk level',
+  'Your preferred stocks',
   'Watch intro videos',
   'Set your budget goal',
 ]
@@ -16,6 +17,8 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
   const [risk, setRisk] = useState('')
   const [budget, setBudget] = useState('')
   const [saving, setSaving] = useState(false)
+  const [individualTickers, setIndividualTickers] = useState('NVDA, TSLA, AVGO, PLTR, META')
+  const [longtermTickers, setLongtermTickers] = useState('VOO, QQQ, NVDA')
 
   const goNext = async () => {
     if (currentStep < STEPS.length - 1) {
@@ -38,6 +41,8 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
         risk_level: risk || 'moderate',
         is_new_to_investing: isNewToInvesting ?? true,
         budget_goal: budget ? parseFloat(budget) : null,
+        individual_tickers: isNewToInvesting ? null : individualTickers,
+        longterm_tickers: isNewToInvesting ? null : longtermTickers,
       })
     }
 
@@ -199,8 +204,65 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
           </div>
         )}
 
-        {/* Step 4 — Watch intro videos */}
+        {/* Step 4 — Preferred stocks */}
         {currentStep === 3 && (
+          <div>
+            <h2 className="text-text-main text-2xl font-bold mb-2">
+              Your preferred stocks
+            </h2>
+            <p className="text-text-muted text-sm mb-8">
+              {isNewToInvesting
+                ? 'Afrifa will suggest the best stocks for you based on your risk level.'
+                : 'Enter the tickers you want Afrifa to invest in. Separate with commas.'}
+            </p>
+
+            {isNewToInvesting ? (
+              <div className="bg-elevated border border-border rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                    <span className="text-base text-xs font-bold">A</span>
+                  </div>
+                  <p className="text-text-main text-sm font-medium">Afrifa will handle this for you!</p>
+                </div>
+                <p className="text-text-muted text-sm leading-relaxed">
+                  Since you're new to investing, Afrifa will suggest the best stocks and ETFs based on your risk level and budget. No need to pick anything now — just keep going!
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-text-muted text-xs font-medium mb-2 block">
+                    INDIVIDUAL STOCKS
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. NVDA, TSLA, AVGO, META"
+                    value={individualTickers}
+                    onChange={(e) => setIndividualTickers(e.target.value)}
+                    className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary"
+                  />
+                  <p className="text-text-hint text-xs mt-1">Higher risk · Higher reward stocks</p>
+                </div>
+                <div>
+                  <label className="text-text-muted text-xs font-medium mb-2 block">
+                    LONG TERM / INDEX FUNDS
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. VOO, QQQ, NVDA"
+                    value={longtermTickers}
+                    onChange={(e) => setLongtermTickers(e.target.value)}
+                    className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary"
+                  />
+                  <p className="text-text-hint text-xs mt-1">Lower risk · Steady long term growth</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5 — Watch intro videos */}
+        {currentStep === 4 && (
           <div>
             <h2 className="text-text-main text-2xl font-bold mb-2">
               Watch intro videos
@@ -252,8 +314,8 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
           </div>
         )}
 
-        {/* Step 5 — Budget goal */}
-        {currentStep === 4 && (
+        {/* Step 6 — Budget goal */}
+        {currentStep === 5 && (
           <div>
             <h2 className="text-text-main text-2xl font-bold mb-2">
               Set your first budget goal
