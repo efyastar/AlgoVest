@@ -123,11 +123,11 @@ export default function AdvisorTab() {
 Risk level: ${risk}
 Split: ${split.individual}% individual (${CURRENCIES[currency]}${individualAmount.toFixed(2)}) and ${split.longterm}% long-term (${CURRENCIES[currency]}${longtermAmount.toFixed(2)})
 
-INDIVIDUAL STOCKS — distribute across these tickers: ${individualStocks}
-Pick 3-5 of the most relevant ones based on risk level ${risk} and distribute the ${CURRENCIES[currency]}${individualAmount.toFixed(2)} among them.
+INDIVIDUAL STOCKS — you MUST use ALL of these tickers: ${individualStocks}
+Distribute the ${CURRENCIES[currency]}${individualAmount.toFixed(2)} across ALL of them. Do not skip any ticker. Adjust percentages based on risk level ${risk} but include every single one.
 
-LONG TERM — distribute across these tickers: ${longtermStocks}
-Distribute the ${CURRENCIES[currency]}${longtermAmount.toFixed(2)} among them.
+LONG TERM — you MUST use ALL of these tickers: ${longtermStocks}
+Distribute the ${CURRENCIES[currency]}${longtermAmount.toFixed(2)} across ALL of them. Do not skip any ticker.
 
 Respond ONLY with this exact JSON, no markdown, no backticks:
 {
@@ -151,8 +151,8 @@ Respond ONLY with this exact JSON, no markdown, no backticks:
 Rules:
 - individual allocations percentages must sum to 100
 - longterm allocations percentages must sum to 100
-- be specific with real tickers
-- keep it to 3-5 allocations per section`
+- use ALL tickers provided, do not skip any
+- be specific with real tickers`
 
     let text = ''
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -168,15 +168,30 @@ Rules:
           }
         )
         const data = await resp.json()
+        if (data.error?.code === 429) {
+          setError('Afrifa is busy right now. Please wait a moment and try again.')
+          setLoading(false)
+          return
+        }
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
           text = data.candidates[0].content.parts[0].text
           break
         }
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 5000))
       } catch (e) {
-        if (attempt === 2) throw e
-        await new Promise(r => setTimeout(r, 2000))
+        if (attempt === 2) {
+          setError('Afrifa is unavailable right now. Please try again.')
+          setLoading(false)
+          return
+        }
+        await new Promise(r => setTimeout(r, 5000))
       }
+    }
+
+    if (!text) {
+      setError('Afrifa could not respond. Please try again.')
+      setLoading(false)
+      return
     }
 
     try {
