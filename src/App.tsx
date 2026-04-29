@@ -7,6 +7,7 @@ import AdvisorTab from './components/AdvisorTab'
 import PortfolioTab from './components/PortfolioTab'
 import AlertsTab from './components/AlertsTab'
 import AppsTab from './components/AppsTab'
+import SettingsPage from './components/SettingsPage'
 
 const tabs = [
   { id: 'learn', label: 'Learn' },
@@ -21,9 +22,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('learn')
   const [showInvestPopup, setShowInvestPopup] = useState(false)
   const [userName, setUserName] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
-    // Logout when tab/browser is closed
     window.addEventListener('beforeunload', async () => {
       await supabase.auth.signOut()
       localStorage.removeItem('loginTime')
@@ -34,7 +35,6 @@ export default function App() {
         const loginTime = localStorage.getItem('loginTime')
         const now = Date.now()
 
-        // Auto logout after 1 hour
         if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
           await supabase.auth.signOut()
           localStorage.removeItem('loginTime')
@@ -103,20 +103,34 @@ export default function App() {
         <Onboarding onFinish={handleLogin} />
       )}
 
-      {screen === 'main' && (
+      {screen === 'main' && showSettings && (
+        <SettingsPage
+          onClose={() => {
+            setShowSettings(false)
+            const newName = localStorage.getItem('userName') || userName
+            setUserName(newName)
+          }}
+          onNameUpdate={(newName) => setUserName(newName)}
+        />
+      )}
+
+      {screen === 'main' && !showSettings && (
         <div className="w-full min-h-screen flex flex-col">
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-            <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-3 text-left"
+            >
               <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
               <div>
                 <h1 className="text-sm font-semibold text-text-main">
                   Hey, {userName} 👋
                 </h1>
-                <p className="text-xs text-text-muted">smart investing for everyone</p>
+                <p className="text-xs text-text-muted">tap to edit profile</p>
               </div>
-            </div>
+            </button>
             <button
               onClick={async () => {
                 await supabase.auth.signOut()
