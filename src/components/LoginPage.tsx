@@ -42,7 +42,8 @@ export default function LoginPage({ onSignUp: _onSignUp, onLogin }: { onSignUp: 
         email,
         password,
         options: {
-          data: { full_name: name }
+          data: { full_name: name },
+          emailRedirectTo: 'https://algo-vest-b864.vercel.app'
         }
       })
       if (error) {
