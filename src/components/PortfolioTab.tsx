@@ -1,25 +1,38 @@
-import { supabase } from '../supabase'
 import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
 
 const CURRENCIES: Record<string, string> = {
   USD: '$', GHS: '₵', EUR: '€', GBP: '£', NGN: '₦'
 }
 
+const cryptoMap: Record<string, string> = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+  BNB: 'binancecoin',
+  SOL: 'solana',
+  XRP: 'ripple',
+}
+
 type Investment = {
   id: string
   name: string
+  ticker?: string
   amount: number
   currency: string
   date: string
   status: 'active' | 'closed'
   close_amount?: number
+  purchase_price?: number
+  current_price?: number
 }
 
 export default function PortfolioTab() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchingPrices, setFetchingPrices] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [name, setName] = useState('')
+  const [ticker, setTicker] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [closeId, setCloseId] = useState<string | null>(null)
@@ -37,41 +50,143 @@ export default function PortfolioTab() {
       .from('investments')
       .select('*')
       .order('created_at', { ascending: false })
-    if (!error && data) setInvestments(data)
+    if (!error && data) {
+      setInvestments(data)
+      fetchLivePrices(data)
+    }
     setLoading(false)
+  }
+
+  const fetchLivePrices = async (currentInvestments: Investment[]) => {
+    const active = currentInvestments.filter(i => i.status === 'active' && i.ticker)
+    if (active.length === 0) return
+
+    setFetchingPrices(true)
+
+    const cryptoAssets = active.filter(i => cryptoMap[i.ticker!.toUpperCase()])
+    const stockAssets = active.filter(i => !cryptoMap[i.ticker!.toUpperCase()])
+
+    let cryptoData: Record<string, number> = {}
+    if (cryptoAssets.length > 0) {
+      try {
+        const ids = cryptoAssets.map(i => cryptoMap[i.ticker!.toUpperCase()]).join(',')
+        const resp = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`
+        )
+        const data = await resp.json()
+        cryptoAssets.forEach(i => {
+          const coinId = cryptoMap[i.ticker!.toUpperCase()]
+          if (data[coinId]) cryptoData[i.ticker!.toUpperCase()] = data[coinId].usd
+        })
+      } catch (e) {
+        console.error('Crypto price fetch failed:', e)
+      }
+    }
+
+    const stockData: Record<string, number> = {}
+    for (const inv of stockAssets) {
+      try {
+        await new Promise(r => setTimeout(r, 1200))
+        const resp = await fetch(
+          `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${inv.ticker}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`
+        )
+        const data = await resp.json()
+        const quote = data['Global Quote']
+        if (quote && quote['05. price']) {
+          stockData[inv.ticker!.toUpperCase()] = parseFloat(quote['05. price'])
+        }
+      } catch (e) {
+        console.error(`Stock fetch failed for ${inv.ticker}:`, e)
+      }
+    }
+
+    const updated = await Promise.all(currentInvestments.map(async inv => {
+      if (!inv.ticker || inv.status === 'closed') return inv
+      const t = inv.ticker.toUpperCase()
+      const price = cryptoData[t] || stockData[t]
+      if (!price) return inv
+
+      await supabase
+        .from('investments')
+        .update({ current_price: price })
+        .eq('id', inv.id)
+
+      return { ...inv, current_price: price }
+    }))
+
+    setInvestments(updated)
+    setFetchingPrices(false)
   }
 
   const totalInvested = investments
     .filter(i => i.status === 'active')
     .reduce((sum, i) => sum + i.amount, 0)
 
+  const totalCurrentValue = investments
+    .filter(i => i.status === 'active')
+    .reduce((sum, i) => {
+      if (i.current_price && i.purchase_price && i.purchase_price > 0) {
+        const shares = i.amount / i.purchase_price
+        return sum + (shares * i.current_price)
+      }
+      return sum + i.amount
+    }, 0)
+
+  const totalPL = totalCurrentValue - totalInvested
+
   const addInvestment = async () => {
-    console.log('name:', name, 'amount:', amount)
     if (!name || !amount) return
 
     const { data: { user } } = await supabase.auth.getUser()
-    console.log('User:', user)
     if (!user) return
+
+    // Get current price for the ticker
+    let purchasePrice = null
+    if (ticker) {
+      const t = ticker.toUpperCase()
+      if (cryptoMap[t]) {
+        try {
+          const resp = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoMap[t]}&vs_currencies=usd`
+          )
+          const data = await resp.json()
+          purchasePrice = data[cryptoMap[t]]?.usd || null
+        } catch (e) {}
+      } else {
+        try {
+          const resp = await fetch(
+            `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${t}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`
+          )
+          const data = await resp.json()
+          const quote = data['Global Quote']
+          if (quote && quote['05. price']) {
+            purchasePrice = parseFloat(quote['05. price'])
+          }
+        } catch (e) {}
+      }
+    }
 
     const { data, error } = await supabase
       .from('investments')
       .insert({
         user_id: user.id,
         name,
+        ticker: ticker.toUpperCase() || null,
         amount: parseFloat(amount),
         currency,
         date: new Date().toLocaleDateString(),
         status: 'active',
+        purchase_price: purchasePrice,
+        current_price: purchasePrice,
       })
       .select()
       .single()
 
-    console.log('Insert data:', data)
-    console.log('Insert error:', error)
-
     if (!error && data) {
-      setInvestments(prev => [data, ...prev])
+      const newInvestments = [data, ...investments]
+      setInvestments(newInvestments)
       setName('')
+      setTicker('')
       setAmount('')
       setShowAdd(false)
     }
@@ -83,6 +198,7 @@ export default function PortfolioTab() {
       .from('investments')
       .update({ status: 'closed', close_amount: parseFloat(closeAmount) })
       .eq('id', id)
+
     if (!error) {
       setInvestments(prev => prev.map(i =>
         i.id === id
@@ -105,8 +221,18 @@ export default function PortfolioTab() {
       return
     }
 
-    const prompt = `A user has these active investments: ${activeInvestments.map(i => `${i.name} - ${CURRENCIES[i.currency]}${i.amount}`).join(', ')}. 
-    In 2-3 short sentences, suggest which one might not be growing well and what they could switch to instead. Be direct and specific.`
+    const investmentSummary = activeInvestments.map(i => {
+      const currentVal = i.current_price && i.purchase_price && i.purchase_price > 0
+        ? ((i.amount / i.purchase_price) * i.current_price).toFixed(2)
+        : i.amount.toString()
+      const pl = i.current_price && i.purchase_price && i.purchase_price > 0
+        ? (((i.current_price - i.purchase_price) / i.purchase_price) * 100).toFixed(1)
+        : '0'
+      return `${i.name} - invested ${CURRENCIES[i.currency]}${i.amount} - current value ${CURRENCIES[i.currency]}${currentVal} (${pl}% change)`
+    }).join(', ')
+
+    const prompt = `A user has these active investments: ${investmentSummary}. 
+    In 2-3 short sentences, identify which investment is underperforming and suggest what they could sell it for and what to buy instead. Be direct and specific. Respond as Afrifa.`
 
     try {
       const resp = await fetch(
@@ -138,20 +264,22 @@ export default function PortfolioTab() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <button onClick={() => console.log('TEST CLICK WORKS')}>TEST</button>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="bg-surface border border-border rounded-xl p-4">
-          <p className="text-text-muted text-xs mb-1">TOTAL INVESTED</p>
-          <p className="text-text-main text-2xl font-bold">
-            {totalInvested > 0 ? `$${totalInvested.toLocaleString()}` : '$0'}
-          </p>
+          <p className="text-text-muted text-xs mb-1">INVESTED</p>
+          <p className="text-text-main text-lg font-bold">${totalInvested.toLocaleString()}</p>
         </div>
         <div className="bg-surface border border-border rounded-xl p-4">
-          <p className="text-text-muted text-xs mb-1">POSITIONS</p>
-          <p className="text-text-main text-2xl font-bold">
-            {investments.filter(i => i.status === 'active').length}
+          <p className="text-text-muted text-xs mb-1">VALUE</p>
+          <p className="text-text-main text-lg font-bold">${totalCurrentValue.toFixed(0)}</p>
+          {fetchingPrices && <p className="text-text-hint text-xs animate-pulse">updating...</p>}
+        </div>
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <p className="text-text-muted text-xs mb-1">P&L</p>
+          <p className={`text-lg font-bold ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+            {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(0)}
           </p>
         </div>
       </div>
@@ -196,9 +324,19 @@ export default function PortfolioTab() {
             <label className="text-text-muted text-xs mb-1 block">ASSET NAME</label>
             <input
               type="text"
-              placeholder="e.g. Bitcoin (BTC)"
+              placeholder="e.g. Apple Inc."
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div className="mb-3">
+            <label className="text-text-muted text-xs mb-1 block">TICKER (optional but needed for live prices)</label>
+            <input
+              type="text"
+              placeholder="e.g. AAPL"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
               className="w-full bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary"
             />
           </div>
@@ -214,7 +352,7 @@ export default function PortfolioTab() {
             </select>
             <input
               type="number"
-              placeholder="Amount"
+              placeholder="Amount invested"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="flex-1 bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-sm outline-none focus:border-primary"
@@ -240,23 +378,48 @@ export default function PortfolioTab() {
         )}
 
         {investments.map(inv => {
-          const pl = inv.close_amount ? inv.close_amount - inv.amount : null
-          const plPct = pl !== null ? ((pl / inv.amount) * 100).toFixed(1) : null
+          const hasLivePrice = inv.current_price && inv.purchase_price && inv.purchase_price > 0
+          const shares = hasLivePrice ? inv.amount / inv.purchase_price! : 0
+          const currentValue = hasLivePrice ? shares * inv.current_price! : inv.amount
+          const pl = hasLivePrice ? currentValue - inv.amount : 0
+          const plPct = hasLivePrice ? ((pl / inv.amount) * 100).toFixed(1) : null
+
+          const closedPl = inv.close_amount ? inv.close_amount - inv.amount : null
+          const closedPlPct = closedPl !== null ? ((closedPl / inv.amount) * 100).toFixed(1) : null
 
           return (
             <div key={inv.id} className="bg-surface border border-border rounded-xl p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-text-main font-medium text-sm">{inv.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-text-main font-medium text-sm">{inv.name}</p>
+                    {inv.ticker && (
+                      <span className="text-xs bg-elevated text-text-muted px-2 py-0.5 rounded-full font-mono">
+                        {inv.ticker}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-text-muted text-xs mt-0.5">{inv.date}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-text-main font-semibold font-mono">
+                  <p className="text-text-main font-semibold font-mono text-sm">
                     {CURRENCIES[inv.currency]}{inv.amount.toLocaleString()}
+                    <span className="text-text-muted text-xs"> invested</span>
                   </p>
-                  {inv.status === 'closed' && pl !== null && (
-                    <p className={`text-xs font-mono font-medium ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                      {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)} ({plPct}%)
+                  {inv.status === 'active' && hasLivePrice && (
+                    <div>
+                      <p className="text-text-main font-mono text-sm">
+                        {CURRENCIES[inv.currency]}{currentValue.toFixed(2)}
+                        <span className="text-text-muted text-xs"> now</span>
+                      </p>
+                      <p className={`text-xs font-mono font-medium ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                        {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)} ({plPct}%)
+                      </p>
+                    </div>
+                  )}
+                  {inv.status === 'closed' && closedPl !== null && (
+                    <p className={`text-xs font-mono font-medium ${closedPl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                      {closedPl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{closedPl.toFixed(2)} ({closedPlPct}%)
                     </p>
                   )}
                 </div>
