@@ -37,6 +37,8 @@ export default function PortfolioTab() {
   const [currency, setCurrency] = useState('USD')
   const [closeId, setCloseId] = useState<string | null>(null)
   const [closeAmount, setCloseAmount] = useState('')
+  const [addMoreId, setAddMoreId] = useState<string | null>(null)
+  const [addMoreAmount, setAddMoreAmount] = useState('')
   const [aiSuggestion, setAiSuggestion] = useState('')
   const [loadingSuggestion, setLoadingSuggestion] = useState(false)
 
@@ -140,7 +142,6 @@ export default function PortfolioTab() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Get current price for the ticker
     let purchasePrice = null
     if (ticker) {
       const t = ticker.toUpperCase()
@@ -189,6 +190,24 @@ export default function PortfolioTab() {
       setTicker('')
       setAmount('')
       setShowAdd(false)
+    }
+  }
+
+  const addToInvestment = async (id: string, currentAmount: number) => {
+    if (!addMoreAmount) return
+    const newAmount = currentAmount + parseFloat(addMoreAmount)
+
+    const { error } = await supabase
+      .from('investments')
+      .update({ amount: newAmount })
+      .eq('id', id)
+
+    if (!error) {
+      setInvestments(prev => prev.map(i =>
+        i.id === id ? { ...i, amount: newAmount } : i
+      ))
+      setAddMoreId(null)
+      setAddMoreAmount('')
     }
   }
 
@@ -331,7 +350,7 @@ export default function PortfolioTab() {
             />
           </div>
           <div className="mb-3">
-            <label className="text-text-muted text-xs mb-1 block">TICKER (optional but needed for live prices)</label>
+            <label className="text-text-muted text-xs mb-1 block">TICKER (needed for live prices)</label>
             <input
               type="text"
               placeholder="e.g. AAPL"
@@ -383,7 +402,6 @@ export default function PortfolioTab() {
           const currentValue = hasLivePrice ? shares * inv.current_price! : inv.amount
           const pl = hasLivePrice ? currentValue - inv.amount : 0
           const plPct = hasLivePrice ? ((pl / inv.amount) * 100).toFixed(1) : null
-
           const closedPl = inv.close_amount ? inv.close_amount - inv.amount : null
           const closedPlPct = closedPl !== null ? ((closedPl / inv.amount) * 100).toFixed(1) : null
 
@@ -449,13 +467,43 @@ export default function PortfolioTab() {
                         Cancel
                       </button>
                     </div>
+                  ) : addMoreId === inv.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        placeholder="Amount to add"
+                        value={addMoreAmount}
+                        onChange={(e) => setAddMoreAmount(e.target.value)}
+                        className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-text-main text-xs outline-none focus:border-primary"
+                      />
+                      <button
+                        onClick={() => addToInvestment(inv.id, inv.amount)}
+                        className="px-3 py-2 bg-primary text-base text-xs font-medium rounded-lg"
+                      >
+                        Add
+                      </button>
+                      <button
+                        onClick={() => setAddMoreId(null)}
+                        className="px-3 py-2 border border-border text-text-muted text-xs rounded-lg"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => setCloseId(inv.id)}
-                      className="text-text-muted text-xs border border-border rounded-lg px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"
-                    >
-                      Mark as sold
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setAddMoreId(inv.id)}
+                        className="text-primary text-xs border border-primary rounded-lg px-3 py-1.5 hover:bg-primary-tint transition-colors"
+                      >
+                        + Add more
+                      </button>
+                      <button
+                        onClick={() => setCloseId(inv.id)}
+                        className="text-text-muted text-xs border border-border rounded-lg px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"
+                      >
+                        Mark as sold
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
