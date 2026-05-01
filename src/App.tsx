@@ -31,33 +31,57 @@ export default function App() {
     })
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const loginTime = localStorage.getItem('loginTime')
-        const now = Date.now()
+    if (session) {
+      const loginTime = localStorage.getItem('loginTime')
+      const now = Date.now()
 
-        if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
-          await supabase.auth.signOut()
-          localStorage.removeItem('loginTime')
-          setScreen('login')
-          return
-        }
-
-        if (!loginTime) {
-          localStorage.setItem('loginTime', now.toString())
-        }
-
-        setScreen('main')
-        const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
-        setUserName(name)
-      } else {
+      if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
+        await supabase.auth.signOut()
         localStorage.removeItem('loginTime')
         setScreen('login')
+        return
       }
-    })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    if (!loginTime) {
+      localStorage.setItem('loginTime', now.toString())
+    }
+
+    // Check if user has completed onboarding
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .maybeSingle()
+
+    if (!profile) {
+      // New user — send to onboarding
+      setScreen('onboarding')
+      } else {
         setScreen('main')
+      }
+
+      const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
+      setUserName(name)
+    } else {
+      localStorage.removeItem('loginTime')
+      setScreen('login')
+    }
+  })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (!profile) {
+          setScreen('onboarding')
+        } else {
+          setScreen('main')
+        }
+
         const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
         setUserName(name)
       } else {
