@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
 
-export default function LoginPage({ onSignUp, onLogin }: { onSignUp: () => void, onLogin: () => void }) {
+export default function LoginPage({ onSignUp: _onSignUp, onLogin }: { onSignUp: () => void, onLogin: () => void }) {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
