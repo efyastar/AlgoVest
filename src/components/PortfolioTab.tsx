@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 
 const CURRENCIES: Record<string, string> = {
@@ -6,11 +6,7 @@ const CURRENCIES: Record<string, string> = {
 }
 
 const cryptoMap: Record<string, string> = {
-  BTC: 'bitcoin',
-  ETH: 'ethereum',
-  BNB: 'binancecoin',
-  SOL: 'solana',
-  XRP: 'ripple',
+  BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple',
 }
 
 type Investment = {
@@ -41,6 +37,9 @@ export default function PortfolioTab() {
   const [addMoreAmount, setAddMoreAmount] = useState('')
   const [aiSuggestion, setAiSuggestion] = useState('')
   const [loadingSuggestion, setLoadingSuggestion] = useState(false)
+  const [swipedId, setSwipedId] = useState<string | null>(null)
+  const [swipeX, setSwipeX] = useState(0)
+  const startXRef = useRef(0)
 
   useEffect(() => {
     fetchInvestments()
@@ -62,7 +61,6 @@ export default function PortfolioTab() {
   const fetchLivePrices = async (currentInvestments: Investment[]) => {
     const active = currentInvestments.filter(i => i.status === 'active' && i.ticker)
     if (active.length === 0) return
-
     setFetchingPrices(true)
 
     const cryptoAssets = active.filter(i => cryptoMap[i.ticker!.toUpperCase()])
@@ -72,17 +70,13 @@ export default function PortfolioTab() {
     if (cryptoAssets.length > 0) {
       try {
         const ids = cryptoAssets.map(i => cryptoMap[i.ticker!.toUpperCase()]).join(',')
-        const resp = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`
-        )
+        const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`)
         const data = await resp.json()
         cryptoAssets.forEach(i => {
           const coinId = cryptoMap[i.ticker!.toUpperCase()]
           if (data[coinId]) cryptoData[i.ticker!.toUpperCase()] = data[coinId].usd
         })
-      } catch (e) {
-        console.error('Crypto price fetch failed:', e)
-      }
+      } catch (e) { console.error('Crypto price fetch failed:', e) }
     }
 
     const stockData: Record<string, number> = {}
@@ -94,12 +88,8 @@ export default function PortfolioTab() {
         )
         const data = await resp.json()
         const quote = data['Global Quote']
-        if (quote && quote['05. price']) {
-          stockData[inv.ticker!.toUpperCase()] = parseFloat(quote['05. price'])
-        }
-      } catch (e) {
-        console.error(`Stock fetch failed for ${inv.ticker}:`, e)
-      }
+        if (quote && quote['05. price']) stockData[inv.ticker!.toUpperCase()] = parseFloat(quote['05. price'])
+      } catch (e) { console.error(`Stock fetch failed for ${inv.ticker}:`, e) }
     }
 
     const updated = await Promise.all(currentInvestments.map(async inv => {
@@ -107,12 +97,7 @@ export default function PortfolioTab() {
       const t = inv.ticker.toUpperCase()
       const price = cryptoData[t] || stockData[t]
       if (!price) return inv
-
-      await supabase
-        .from('investments')
-        .update({ current_price: price })
-        .eq('id', inv.id)
-
+      await supabase.from('investments').update({ current_price: price }).eq('id', inv.id)
       return { ...inv, current_price: price }
     }))
 
@@ -120,25 +105,19 @@ export default function PortfolioTab() {
     setFetchingPrices(false)
   }
 
-  const totalInvested = investments
-    .filter(i => i.status === 'active')
-    .reduce((sum, i) => sum + i.amount, 0)
+  const totalInvested = investments.filter(i => i.status === 'active').reduce((sum, i) => sum + i.amount, 0)
 
-  const totalCurrentValue = investments
-    .filter(i => i.status === 'active')
-    .reduce((sum, i) => {
-      if (i.current_price && i.purchase_price && i.purchase_price > 0) {
-        const shares = i.amount / i.purchase_price
-        return sum + (shares * i.current_price)
-      }
-      return sum + i.amount
-    }, 0)
+  const totalCurrentValue = investments.filter(i => i.status === 'active').reduce((sum, i) => {
+    if (i.current_price && i.purchase_price && i.purchase_price > 0) {
+      return sum + ((i.amount / i.purchase_price) * i.current_price)
+    }
+    return sum + i.amount
+  }, 0)
 
   const totalPL = totalCurrentValue - totalInvested
 
   const addInvestment = async () => {
     if (!name || !amount) return
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -147,22 +126,16 @@ export default function PortfolioTab() {
       const t = ticker.toUpperCase()
       if (cryptoMap[t]) {
         try {
-          const resp = await fetch(
-            `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoMap[t]}&vs_currencies=usd`
-          )
+          const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cryptoMap[t]}&vs_currencies=usd`)
           const data = await resp.json()
           purchasePrice = data[cryptoMap[t]]?.usd || null
         } catch (e) {}
       } else {
         try {
-          const resp = await fetch(
-            `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${t}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`
-          )
+          const resp = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${t}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`)
           const data = await resp.json()
           const quote = data['Global Quote']
-          if (quote && quote['05. price']) {
-            purchasePrice = parseFloat(quote['05. price'])
-          }
+          if (quote && quote['05. price']) purchasePrice = parseFloat(quote['05. price'])
         } catch (e) {}
       }
     }
@@ -184,8 +157,7 @@ export default function PortfolioTab() {
       .single()
 
     if (!error && data) {
-      const newInvestments = [data, ...investments]
-      setInvestments(newInvestments)
+      setInvestments(prev => [data, ...prev])
       setName('')
       setTicker('')
       setAmount('')
@@ -196,16 +168,9 @@ export default function PortfolioTab() {
   const addToInvestment = async (id: string, currentAmount: number) => {
     if (!addMoreAmount) return
     const newAmount = currentAmount + parseFloat(addMoreAmount)
-
-    const { error } = await supabase
-      .from('investments')
-      .update({ amount: newAmount })
-      .eq('id', id)
-
+    const { error } = await supabase.from('investments').update({ amount: newAmount }).eq('id', id)
     if (!error) {
-      setInvestments(prev => prev.map(i =>
-        i.id === id ? { ...i, amount: newAmount } : i
-      ))
+      setInvestments(prev => prev.map(i => i.id === id ? { ...i, amount: newAmount } : i))
       setAddMoreId(null)
       setAddMoreAmount('')
     }
@@ -213,19 +178,20 @@ export default function PortfolioTab() {
 
   const closeInvestment = async (id: string) => {
     if (!closeAmount) return
-    const { error } = await supabase
-      .from('investments')
-      .update({ status: 'closed', close_amount: parseFloat(closeAmount) })
-      .eq('id', id)
-
+    const { error } = await supabase.from('investments').update({ status: 'closed', close_amount: parseFloat(closeAmount) }).eq('id', id)
     if (!error) {
-      setInvestments(prev => prev.map(i =>
-        i.id === id
-          ? { ...i, status: 'closed', close_amount: parseFloat(closeAmount) }
-          : i
-      ))
+      setInvestments(prev => prev.map(i => i.id === id ? { ...i, status: 'closed', close_amount: parseFloat(closeAmount) } : i))
       setCloseId(null)
       setCloseAmount('')
+    }
+  }
+
+  const deleteInvestment = async (id: string) => {
+    const { error } = await supabase.from('investments').delete().eq('id', id)
+    if (!error) {
+      setInvestments(prev => prev.filter(i => i.id !== id))
+      setSwipedId(null)
+      setSwipeX(0)
     }
   }
 
@@ -233,7 +199,6 @@ export default function PortfolioTab() {
     setLoadingSuggestion(true)
     setAiSuggestion('')
     const activeInvestments = investments.filter(i => i.status === 'active')
-
     if (activeInvestments.length === 0) {
       setAiSuggestion('Add some investments first and Afrifa will review them for you!')
       setLoadingSuggestion(false)
@@ -250,8 +215,7 @@ export default function PortfolioTab() {
       return `${i.name} - invested ${CURRENCIES[i.currency]}${i.amount} - current value ${CURRENCIES[i.currency]}${currentVal} (${pl}% change)`
     }).join(', ')
 
-    const prompt = `A user has these active investments: ${investmentSummary}. 
-    In 2-3 short sentences, identify which investment is underperforming and suggest what they could sell it for and what to buy instead. Be direct and specific. Respond as Afrifa.`
+    const prompt = `A user has these active investments: ${investmentSummary}. In 2-3 short sentences, identify which investment is underperforming and suggest what they could sell it for and what to buy instead. Be direct and specific. Respond as Afrifa.`
 
     try {
       const resp = await fetch(
@@ -259,18 +223,35 @@ export default function PortfolioTab() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         }
       )
       const data = await resp.json()
-      const text = data.candidates[0].content.parts[0].text
-      setAiSuggestion(text)
+      setAiSuggestion(data.candidates[0].content.parts[0].text)
     } catch (e) {
       setAiSuggestion('Could not load suggestion. Please try again.')
     }
     setLoadingSuggestion(false)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent, id: string) => {
+    startXRef.current = e.touches[0].clientX
+    setSwipedId(id)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const diff = e.touches[0].clientX - startXRef.current
+    if (diff < 0) setSwipeX(Math.max(diff, -80))
+    else setSwipeX(0)
+  }
+
+  const handleTouchEnd = () => {
+    if (swipeX < -40) {
+      setSwipeX(-80)
+    } else {
+      setSwipeX(0)
+      setSwipedId(null)
+    }
   }
 
   if (loading) {
@@ -406,117 +387,130 @@ export default function PortfolioTab() {
           const closedPlPct = closedPl !== null ? ((closedPl / inv.amount) * 100).toFixed(1) : null
 
           return (
-            <div key={inv.id} className="bg-surface border border-border rounded-xl p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-text-main font-medium text-sm">{inv.name}</p>
-                    {inv.ticker && (
-                      <span className="text-xs bg-elevated text-text-muted px-2 py-0.5 rounded-full font-mono">
-                        {inv.ticker}
-                      </span>
+            <div key={inv.id} className="relative overflow-hidden rounded-xl group">
+            {/* Delete button behind — shows on swipe (mobile) or hover (desktop) */}
+            <div className="absolute right-0 top-0 bottom-0 w-20 bg-loss-bg flex items-center justify-center rounded-r-xl">
+              <button
+                onClick={() => deleteInvestment(inv.id)}
+                className="text-loss-text text-xs font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+
+            {/* Delete button — hover on desktop */}
+            <button
+              onClick={() => deleteInvestment(inv.id)}
+              className="absolute top-1/2 -translate-y-1/2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-loss-bg text-loss-text text-xs px-2 py-1 rounded-lg z-10 md:block hidden"
+            >
+              Delete
+            </button>
+
+              {/* Investment card */}
+              <div
+                className="bg-surface border border-border rounded-xl p-4 transition-transform duration-200"
+                style={{
+                  transform: swipedId === inv.id ? `translateX(${swipeX}px)` : 'translateX(0)'
+                }}
+                onTouchStart={(e) => handleTouchStart(e, inv.id)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-text-main font-medium text-sm">{inv.name}</p>
+                      {inv.ticker && (
+                        <span className="text-xs bg-elevated text-text-muted px-2 py-0.5 rounded-full font-mono">
+                          {inv.ticker}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-text-muted text-xs mt-0.5">{inv.date}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-text-main font-semibold font-mono text-sm">
+                      {CURRENCIES[inv.currency]}{inv.amount.toLocaleString()}
+                      <span className="text-text-muted text-xs"> invested</span>
+                    </p>
+                    {inv.status === 'active' && hasLivePrice && (
+                      <div>
+                        <p className="text-text-main font-mono text-sm">
+                          {CURRENCIES[inv.currency]}{currentValue.toFixed(2)}
+                          <span className="text-text-muted text-xs"> now</span>
+                        </p>
+                        <p className={`text-xs font-mono font-medium ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                          {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)} ({plPct}%)
+                        </p>
+                      </div>
+                    )}
+                    {inv.status === 'closed' && closedPl !== null && (
+                      <p className={`text-xs font-mono font-medium ${closedPl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                        {closedPl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{closedPl.toFixed(2)} ({closedPlPct}%)
+                      </p>
                     )}
                   </div>
-                  <p className="text-text-muted text-xs mt-0.5">{inv.date}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-text-main font-semibold font-mono text-sm">
-                    {CURRENCIES[inv.currency]}{inv.amount.toLocaleString()}
-                    <span className="text-text-muted text-xs"> invested</span>
-                  </p>
-                  {inv.status === 'active' && hasLivePrice && (
-                    <div>
-                      <p className="text-text-main font-mono text-sm">
-                        {CURRENCIES[inv.currency]}{currentValue.toFixed(2)}
-                        <span className="text-text-muted text-xs"> now</span>
-                      </p>
-                      <p className={`text-xs font-mono font-medium ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                        {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)} ({plPct}%)
-                      </p>
-                    </div>
-                  )}
-                  {inv.status === 'closed' && closedPl !== null && (
-                    <p className={`text-xs font-mono font-medium ${closedPl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                      {closedPl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{closedPl.toFixed(2)} ({closedPlPct}%)
-                    </p>
-                  )}
-                </div>
+
+                {inv.status === 'active' && (
+                  <div className="mt-3">
+                    {closeId === inv.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Closing amount"
+                          value={closeAmount}
+                          onChange={(e) => setCloseAmount(e.target.value)}
+                          className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-text-main text-xs outline-none focus:border-primary"
+                        />
+                        <button onClick={() => closeInvestment(inv.id)} className="px-3 py-2 bg-primary text-base text-xs font-medium rounded-lg">Confirm</button>
+                        <button onClick={() => setCloseId(null)} className="px-3 py-2 border border-border text-text-muted text-xs rounded-lg">Cancel</button>
+                      </div>
+                    ) : addMoreId === inv.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Amount to add"
+                          value={addMoreAmount}
+                          onChange={(e) => setAddMoreAmount(e.target.value)}
+                          className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-text-main text-xs outline-none focus:border-primary"
+                        />
+                        <button onClick={() => addToInvestment(inv.id, inv.amount)} className="px-3 py-2 bg-primary text-base text-xs font-medium rounded-lg">Add</button>
+                        <button onClick={() => setAddMoreId(null)} className="px-3 py-2 border border-border text-text-muted text-xs rounded-lg">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAddMoreId(inv.id)}
+                          className="text-primary text-xs border border-primary rounded-lg px-3 py-1.5 hover:bg-primary-tint transition-colors"
+                        >
+                          + Add more
+                        </button>
+                        <button
+                          onClick={() => setCloseId(inv.id)}
+                          className="text-text-muted text-xs border border-border rounded-lg px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"
+                        >
+                          Mark as sold
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {inv.status === 'closed' && (
+                  <span className="inline-block mt-2 text-xs bg-elevated text-text-muted px-2 py-0.5 rounded-full">
+                    Closed
+                  </span>
+                )}
               </div>
-
-              {inv.status === 'active' && (
-                <div className="mt-3">
-                  {closeId === inv.id ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="Closing amount"
-                        value={closeAmount}
-                        onChange={(e) => setCloseAmount(e.target.value)}
-                        className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-text-main text-xs outline-none focus:border-primary"
-                      />
-                      <button
-                        onClick={() => closeInvestment(inv.id)}
-                        className="px-3 py-2 bg-primary text-base text-xs font-medium rounded-lg"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        onClick={() => setCloseId(null)}
-                        className="px-3 py-2 border border-border text-text-muted text-xs rounded-lg"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : addMoreId === inv.id ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="Amount to add"
-                        value={addMoreAmount}
-                        onChange={(e) => setAddMoreAmount(e.target.value)}
-                        className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-text-main text-xs outline-none focus:border-primary"
-                      />
-                      <button
-                        onClick={() => addToInvestment(inv.id, inv.amount)}
-                        className="px-3 py-2 bg-primary text-base text-xs font-medium rounded-lg"
-                      >
-                        Add
-                      </button>
-                      <button
-                        onClick={() => setAddMoreId(null)}
-                        className="px-3 py-2 border border-border text-text-muted text-xs rounded-lg"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setAddMoreId(inv.id)}
-                        className="text-primary text-xs border border-primary rounded-lg px-3 py-1.5 hover:bg-primary-tint transition-colors"
-                      >
-                        + Add more
-                      </button>
-                      <button
-                        onClick={() => setCloseId(inv.id)}
-                        className="text-text-muted text-xs border border-border rounded-lg px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"
-                      >
-                        Mark as sold
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {inv.status === 'closed' && (
-                <span className="inline-block mt-2 text-xs bg-elevated text-text-muted px-2 py-0.5 rounded-full">
-                  Closed
-                </span>
-              )}
             </div>
           )
         })}
       </div>
+
+      <p className="text-text-hint text-xs text-center mt-4">
+        Swipe left to delete an investment
+      </p>
 
     </div>
   )

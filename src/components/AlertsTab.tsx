@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 
 type Alert = {
@@ -35,6 +35,11 @@ export default function AlertsTab() {
   const [newTicker, setNewTicker] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
   const [fetchingPrices, setFetchingPrices] = useState(false)
+  const [swipedId, setSwipedId] = useState<string | null>(null)
+  const [swipeX, setSwipeX] = useState(0)
+  const startXRef = useRef(0)
+  const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null)
+  const [editThresholdValue, setEditThresholdValue] = useState('')
 
   useEffect(() => {
     fetchAlerts()
@@ -64,33 +69,21 @@ export default function AlertsTab() {
   const seedDefaultAlerts = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const toInsert = DEFAULT_ALERTS.map(a => ({ ...a, user_id: user.id }))
-    const { data, error } = await supabase
-      .from('alerts')
-      .insert(toInsert)
-      .select()
-
+    const { data, error } = await supabase.from('alerts').insert(toInsert).select()
     if (!error && data) setAlerts(data)
   }
 
   const fetchLivePrices = async (currentAlerts?: Alert[]) => {
     const alertsToUse = currentAlerts || alerts
     if (alertsToUse.length === 0) return
-
     setFetchingPrices(true)
+
     const cryptoMap: Record<string, string> = {
-      BTC: 'bitcoin',
-      ETH: 'ethereum',
-      BNB: 'binancecoin',
-      SOL: 'solana',
-      XRP: 'ripple',
+      BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple',
     }
 
-    const cryptoTickers = alertsToUse
-      .filter(a => cryptoMap[a.ticker])
-      .map(a => cryptoMap[a.ticker])
-
+    const cryptoTickers = alertsToUse.filter(a => cryptoMap[a.ticker]).map(a => cryptoMap[a.ticker])
     const stockAlerts = alertsToUse.filter(a => !cryptoMap[a.ticker])
 
     let cryptoData: Record<string, { usd: number, usd_24h_change: number }> = {}
@@ -100,20 +93,17 @@ export default function AlertsTab() {
           `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoTickers.join(',')}&vs_currencies=usd&include_24hr_change=true`
         )
         cryptoData = await resp.json()
-      } catch (e) {
-        console.error('Crypto fetch failed:', e)
-      }
+      } catch (e) { console.error('Crypto fetch failed:', e) }
     }
 
     const stockData: Record<string, { price: number, change: number }> = {}
     for (const alert of stockAlerts) {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1200))
+        await new Promise(r => setTimeout(r, 1200))
         const resp = await fetch(
           `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${alert.ticker}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_KEY}`
         )
         const data = await resp.json()
-        console.log(`Stock data for ${alert.ticker}:`, data)
         const quote = data['Global Quote']
         if (quote && quote['05. price']) {
           stockData[alert.ticker] = {
@@ -121,9 +111,7 @@ export default function AlertsTab() {
             change: parseFloat(quote['10. change percent'].replace('%', '')),
           }
         }
-      } catch (e) {
-        console.error(`Stock fetch failed for ${alert.ticker}:`, e)
-      }
+      } catch (e) { console.error(`Stock fetch failed for ${alert.ticker}:`, e) }
     }
 
     const updatedAlerts = await Promise.all(alertsToUse.map(async alert => {
@@ -152,22 +140,10 @@ export default function AlertsTab() {
         : alert.fired_message
 
       if (newPrice !== alert.current_price || fired !== alert.fired) {
-        await supabase
-          .from('alerts')
-          .update({
-            current_price: newPrice,
-            fired,
-            fired_message: firedMessage || null,
-          })
-          .eq('id', alert.id)
+        await supabase.from('alerts').update({ current_price: newPrice, fired, fired_message: firedMessage || null }).eq('id', alert.id)
       }
 
-      return {
-        ...alert,
-        current_price: newPrice,
-        fired,
-        fired_message: firedMessage,
-      }
+      return { ...alert, current_price: newPrice, fired, fired_message: firedMessage }
     }))
 
     setAlerts(updatedAlerts as Alert[])
@@ -175,32 +151,37 @@ export default function AlertsTab() {
   }
 
   const toggleAlert = async (id: string, current: boolean) => {
+    const { error } = await supabase.from('alerts').update({ enabled: !current }).eq('id', id)
+    if (!error) setAlerts(prev => prev.map(a => a.id === id ? { ...a, enabled: !current } : a))
+  }
+
+  const saveThreshold = async (id: string) => {
+    if (!editThresholdValue || parseFloat(editThresholdValue) <= 0) return
     const { error } = await supabase
       .from('alerts')
-      .update({ enabled: !current })
+      .update({ threshold: parseFloat(editThresholdValue) })
       .eq('id', id)
 
     if (!error) {
-      setAlerts(prev =>
-        prev.map(a => a.id === id ? { ...a, enabled: !current } : a)
-      )
+      setAlerts(prev => prev.map(a =>
+        a.id === id ? { ...a, threshold: parseFloat(editThresholdValue) } : a
+      ))
     }
+    setEditingThresholdId(null)
+    setEditThresholdValue('')
   }
 
   const deleteAlert = async (id: string) => {
-    const { error } = await supabase
-      .from('alerts')
-      .delete()
-      .eq('id', id)
-
+    const { error } = await supabase.from('alerts').delete().eq('id', id)
     if (!error) {
       setAlerts(prev => prev.filter(a => a.id !== id))
+      setSwipedId(null)
+      setSwipeX(0)
     }
   }
 
   const addCustomAlert = async () => {
     if (!newAsset || !newTicker || !newThreshold) return
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -232,18 +213,14 @@ export default function AlertsTab() {
 
   const askAI = async (alert: Alert) => {
     setLoadingAi(prev => ({ ...prev, [alert.id]: true }))
-    const prompt = `${alert.asset} (${alert.ticker}) just dropped ${alert.threshold}% and is now at ${alert.current_price}. 
-    In 2-3 short sentences, should a moderate risk investor buy now or wait? Be direct and specific. Respond as Afrifa, a friendly financial advisor.`
-
+    const prompt = `${alert.asset} (${alert.ticker}) just dropped ${alert.threshold}% and is now at ${alert.current_price}. In 2-3 short sentences, should a moderate risk investor buy now or wait? Be direct and specific. Respond as Afrifa.`
     try {
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         }
       )
       const data = await resp.json()
@@ -253,6 +230,26 @@ export default function AlertsTab() {
       setAiResponse(prev => ({ ...prev, [alert.id]: 'Afrifa is unavailable right now. Try again.' }))
     }
     setLoadingAi(prev => ({ ...prev, [alert.id]: false }))
+  }
+
+  const handleTouchStart = (e: React.TouchEvent, id: string) => {
+    startXRef.current = e.touches[0].clientX
+    setSwipedId(id)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const diff = e.touches[0].clientX - startXRef.current
+    if (diff < 0) setSwipeX(Math.max(diff, -80))
+    else setSwipeX(0)
+  }
+
+  const handleTouchEnd = () => {
+    if (swipeX < -40) {
+      setSwipeX(-80)
+    } else {
+      setSwipeX(0)
+      setSwipedId(null)
+    }
   }
 
   const firedAlerts = alerts.filter(a => a.fired && a.enabled)
@@ -274,10 +271,7 @@ export default function AlertsTab() {
           <p className="text-text-muted text-xs font-medium mb-3">RECENT SIGNALS</p>
           <div className="flex flex-col gap-3">
             {firedAlerts.map(alert => (
-              <div
-                key={alert.id}
-                className="bg-primary-tint border border-primary rounded-xl p-4"
-              >
+              <div key={alert.id} className="bg-primary-tint border border-primary rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-base text-xs font-bold">{alert.ticker}</span>
@@ -315,47 +309,84 @@ export default function AlertsTab() {
       {/* Alert list */}
       <div className="flex items-center justify-between mb-3">
         <p className="text-text-muted text-xs font-medium">WATCHING</p>
-        {fetchingPrices && (
-          <p className="text-text-muted text-xs animate-pulse">Updating prices...</p>
-        )}
+        {fetchingPrices && <p className="text-text-muted text-xs animate-pulse">Updating prices...</p>}
       </div>
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        {alerts.map((alert, index) => (
-          <div
-            key={alert.id}
-            className={`flex items-center gap-3 px-4 py-4 ${
-              index !== alerts.length - 1 ? 'border-b border-border' : ''
-            }`}
+      {alerts.map((alert, index) => (
+        <div
+          key={alert.id}
+          className={`relative overflow-hidden group ${index !== alerts.length - 1 ? 'border-b border-border' : ''}`}
+        >
+          {/* Delete button behind — swipe on mobile */}
+          <div className="absolute right-0 top-0 bottom-0 w-20 bg-loss-bg flex items-center justify-center">
+            <button
+              onClick={() => deleteAlert(alert.id)}
+              className="text-loss-text text-xs font-semibold"
+            >
+              Delete
+            </button>
+          </div>
+
+          {/* Delete button — hover on desktop */}
+          <button
+            onClick={() => deleteAlert(alert.id)}
+            className="absolute top-1/2 -translate-y-1/2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-loss-bg text-loss-text text-xs px-2 py-1 rounded-lg z-10 md:block hidden"
           >
-            <div className="w-10 h-10 rounded-lg bg-elevated flex items-center justify-center flex-shrink-0">
-              <span className="text-text-main text-xs font-bold">{alert.ticker}</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-text-main text-sm font-medium">{alert.asset}</p>
-              <p className="text-text-muted text-xs mt-0.5">
-                Alert if drops {alert.threshold}% · {alert.current_price}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => toggleAlert(alert.id, alert.enabled)}
-                className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
-                  alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
-                    alert.enabled ? 'left-5' : 'left-1'
+            Delete
+          </button>
+
+            {/* Alert row */}
+            <div
+              className="flex items-center gap-3 px-4 py-4 bg-surface transition-all duration-200 md:group-hover:pl-16"
+              style={{
+                transform: swipedId === alert.id ? `translateX(${swipeX}px)` : 'translateX(0)'
+              }}
+              onTouchStart={(e) => handleTouchStart(e, alert.id)}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div className="w-10 h-10 rounded-lg bg-elevated flex items-center justify-center flex-shrink-0">
+                <span className="text-text-main text-xs font-bold">{alert.ticker}</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-text-main text-sm font-medium">{alert.asset}</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-text-muted text-xs">Alert if drops</span>
+                  {editingThresholdId === alert.id ? (
+                    <input
+                      type="number"
+                      value={editThresholdValue}
+                      onChange={(e) => setEditThresholdValue(e.target.value)}
+                      onBlur={() => saveThreshold(alert.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveThreshold(alert.id)}
+                      autoFocus
+                      className="w-12 bg-elevated border border-primary rounded px-1 py-0.5 text-text-main text-xs outline-none text-center"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingThresholdId(alert.id)
+                        setEditThresholdValue(alert.threshold.toString())
+                      }}
+                      className="text-primary text-xs font-medium border-b border-dashed border-primary"
+                    >
+                      {alert.threshold}%
+                    </button>
+                  )}
+                  <span className="text-text-muted text-xs">· {alert.current_price}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleAlert(alert.id, alert.enabled)}
+                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
+                    alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
                   }`}
-                />
-              </button>
-              <button
-                onClick={() => deleteAlert(alert.id)}
-                className="text-text-hint hover:text-loss-text text-sm transition-colors"
-              >
-                ✕
-              </button>
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${alert.enabled ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -412,7 +443,7 @@ export default function AlertsTab() {
       )}
 
       <p className="text-text-hint text-xs text-center mt-4">
-        Prices update when you open this tab · email and SMS alerts coming soon
+        Swipe left to delete · Prices update when you open this tab
       </p>
 
     </div>
