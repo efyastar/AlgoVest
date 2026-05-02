@@ -28,11 +28,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
-    window.addEventListener('beforeunload', async () => {
-      await supabase.auth.signOut()
-      localStorage.removeItem('loginTime')
-    })
-
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         const loginTime = localStorage.getItem('loginTime')
@@ -98,7 +93,6 @@ export default function App() {
 
     return () => {
       subscription.unsubscribe()
-      window.removeEventListener('beforeunload', () => {})
     }
   }, [])
 
