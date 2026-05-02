@@ -124,7 +124,7 @@ export default function SettingsPage({ onClose, onNameUpdate }: { onClose: () =>
             {[
               { value: 'conservative', label: 'Safe' },
               { value: 'moderate', label: 'Balanced' },
-              { value: 'aggressive', label: 'Bold' },
+              { value: 'aggressive', label: ' Bold' },
             ].map(r => (
               <button
                 key={r.value}
