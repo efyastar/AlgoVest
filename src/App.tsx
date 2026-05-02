@@ -249,7 +249,7 @@ export default function App() {
       )}
 
           {/* Tab content */}
-          <div className="flex-1 px-4 py-6 md:px-8 pb-24 md:pb-6 max-w-5xl mx-auto w-full">
+          <div className="flex-1 px-4 py-6 md:px-8 pb-6 max-w-5xl mx-auto w-full">
             {activeTab === 'home'      && <HomeTab onNavigate={setActiveTab} userName={userName} />}
             {activeTab === 'learn'     && <LearnTab />}
             {activeTab === 'advisor'   && <AdvisorTab />}
@@ -258,20 +258,6 @@ export default function App() {
             {activeTab === 'apps'      && <AppsTab />}
           </div>
 
-          {/* Bottom nav — mobile only */}
-          <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border flex md:hidden z-10">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-3 text-xs font-medium transition-all ${
-                  activeTab === tab.id ? 'text-primary' : 'text-text-muted'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
           {/* Invest today popup */}
           {showInvestPopup && (
