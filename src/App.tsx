@@ -3,13 +3,13 @@ import { supabase } from './supabase'
 import LandingPage from './components/LandingPage'
 import LoginPage from './components/LoginPage'
 import Onboarding from './components/Onboarding'
-import HomeTab from './components/HomeTab'
 import LearnTab from './components/LearnTab'
 import AdvisorTab from './components/AdvisorTab'
 import PortfolioTab from './components/PortfolioTab'
 import AlertsTab from './components/AlertsTab'
 import AppsTab from './components/AppsTab'
 import SettingsPage from './components/SettingsPage'
+import HomeTab from './components/HomeTab'
 
 const tabs = [
   { id: 'home', label: 'Home' },
@@ -26,10 +26,6 @@ export default function App() {
   const [showInvestPopup, setShowInvestPopup] = useState(false)
   const [userName, setUserName] = useState('')
   const [showSettings, setShowSettings] = useState(false)
-
-  useEffect(() => {
-    if (screen !== 'loading') return
-  }, [screen])
 
   useEffect(() => {
     window.addEventListener('beforeunload', async () => {
@@ -116,10 +112,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-base flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <p
-            className="text-text-main text-2xl font-bold"
-            style={{ fontFamily: "'Playfair Display', serif" }}
-          >
+          <p className="text-text-main text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
             AlgoVest
           </p>
           <p className="text-text-muted text-sm animate-pulse">Loading...</p>
@@ -157,22 +150,38 @@ export default function App() {
         <div className="w-full min-h-screen flex flex-col">
 
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-3 text-left"
-            >
-              <div className="w-8 h-8 rounded-lg bg-primary-tint border border-primary flex items-center justify-center">
-                <span className="text-primary text-xs font-bold">A</span>
-              </div>
-              <div>
+          <div className="border-b border-border">
+            <div className="flex items-center justify-between px-4 py-4 md:px-8 max-w-5xl mx-auto w-full">
+
+              {/* Left — name and settings */}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="flex flex-col text-left"
+              >
                 <h1 className="text-sm font-semibold text-text-main">
                   Hey, {userName}
                 </h1>
                 <p className="text-xs text-text-muted">tap to edit profile</p>
+              </button>
+
+              {/* Center — desktop tabs */}
+              <div className="hidden md:flex items-center gap-1">
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === tab.id
+                        ? 'bg-primary text-base'
+                        : 'text-text-muted hover:text-text-main hover:bg-elevated'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-            </button>
-            <div className="flex items-center gap-3">
+
+              {/* Right — sign out */}
               <button
                 onClick={async () => {
                   await supabase.auth.signOut()
@@ -183,11 +192,12 @@ export default function App() {
               >
                 Sign out
               </button>
+
             </div>
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 px-4 py-6 md:px-8 lg:px-16 pb-24 md:pb-6">
+          <div className="flex-1 px-4 py-6 md:px-8 pb-24 md:pb-6 max-w-5xl mx-auto w-full">
             {activeTab === 'home'      && <HomeTab onNavigate={setActiveTab} userName={userName} />}
             {activeTab === 'learn'     && <LearnTab />}
             {activeTab === 'advisor'   && <AdvisorTab />}
@@ -196,7 +206,7 @@ export default function App() {
             {activeTab === 'apps'      && <AppsTab />}
           </div>
 
-          {/* Bottom nav — mobile */}
+          {/* Bottom nav — mobile only */}
           <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border flex md:hidden z-10">
             {tabs.map(tab => (
               <button
@@ -204,23 +214,6 @@ export default function App() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-3 text-xs font-medium transition-all ${
                   activeTab === tab.id ? 'text-primary' : 'text-text-muted'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Top nav — tablet/desktop */}
-          <div className="hidden md:flex fixed top-0 right-16 gap-1 p-4 z-10">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-primary text-base'
-                    : 'text-text-muted hover:text-text-main hover:bg-elevated'
                 }`}
               >
                 {tab.label}
