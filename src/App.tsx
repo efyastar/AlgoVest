@@ -26,6 +26,8 @@ export default function App() {
   const [showInvestPopup, setShowInvestPopup] = useState(false)
   const [userName, setUserName] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [showDrawer, setShowDrawer] = useState(false)
+  
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -143,52 +145,108 @@ export default function App() {
       {screen === 'main' && !showSettings && (
         <div className="w-full min-h-screen flex flex-col">
 
-          {/* Header */}
-          <div className="border-b border-border">
-            <div className="flex items-center justify-between px-4 py-4 md:px-8 max-w-5xl mx-auto w-full">
+      {/* Header */}
+      <div className="border-b border-border">
+        <div className="flex items-center justify-between px-4 py-4 md:px-8 max-w-5xl mx-auto w-full">
 
-              {/* Left — name and settings */}
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setShowDrawer(true)}
+              className="flex flex-col gap-1.5 md:hidden"
+            >
+              <div className="w-5 h-0.5 bg-text-main rounded-full" />
+              <div className="w-5 h-0.5 bg-text-main rounded-full" />
+              <div className="w-5 h-0.5 bg-text-main rounded-full" />
+            </button>
+
+            {/* Name */}
+            <button onClick={() => setShowSettings(true)} className="flex flex-col text-left">
+              <h1 className="text-sm font-semibold text-text-main">Hey, {userName}</h1>
+              <p className="text-xs text-text-muted">tap to edit profile</p>
+            </button>
+          </div>
+
+          {/* Desktop tabs */}
+          <div className="hidden md:flex items-center gap-1">
+            {tabs.map(tab => (
               <button
-                onClick={() => setShowSettings(true)}
-                className="flex flex-col text-left"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-primary text-base'
+                    : 'text-text-muted hover:text-text-main hover:bg-elevated'
+                }`}
               >
-                <h1 className="text-sm font-semibold text-text-main">
-                  Hey, {userName}
-                </h1>
-                <p className="text-xs text-text-muted">tap to edit profile</p>
+                {tab.label}
               </button>
+            ))}
+          </div>
 
-              {/* Center — desktop tabs */}
-              <div className="hidden md:flex items-center gap-1">
-                {tabs.map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-primary text-base'
-                        : 'text-text-muted hover:text-text-main hover:bg-elevated'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+          {/* Sign out */}
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              localStorage.removeItem('loginTime')
+              setScreen('landing')
+            }}
+            className="text-text-muted text-xs hover:text-loss-text transition-colors"
+          >
+            Sign out
+          </button>
 
-              {/* Right — sign out */}
+        </div>
+      </div>
+
+      {/* Mobile drawer */}
+      {showDrawer && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowDrawer(false)}
+          />
+          {/* Drawer */}
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-surface border-r border-border flex flex-col py-8 px-4">
+            <p
+              className="text-text-main text-xl font-bold mb-8 px-2"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              AlgoVest
+            </p>
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id)
+                  setShowDrawer(false)
+                }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all mb-1 ${
+                  activeTab === tab.id
+                    ? 'bg-primary-tint text-primary border border-primary'
+                    : 'text-text-muted hover:text-text-main hover:bg-elevated'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+            <div className="mt-auto">
               <button
                 onClick={async () => {
                   await supabase.auth.signOut()
                   localStorage.removeItem('loginTime')
                   setScreen('landing')
+                  setShowDrawer(false)
                 }}
-                className="text-text-muted text-xs hover:text-loss-text transition-colors"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-loss-text hover:bg-loss-bg transition-all w-full"
               >
                 Sign out
               </button>
-
             </div>
           </div>
+        </div>
+      )}
 
           {/* Tab content */}
           <div className="flex-1 px-4 py-6 md:px-8 pb-24 md:pb-6 max-w-5xl mx-auto w-full">
