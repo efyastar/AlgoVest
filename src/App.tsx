@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
+import LandingPage from './components/LandingPage'
 import LoginPage from './components/LoginPage'
 import Onboarding from './components/Onboarding'
 import LearnTab from './components/LearnTab'
@@ -25,51 +26,31 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
+    if (screen !== 'loading') return
+  }, [screen])
+
+  useEffect(() => {
     window.addEventListener('beforeunload', async () => {
       await supabase.auth.signOut()
       localStorage.removeItem('loginTime')
     })
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-    if (session) {
-      const loginTime = localStorage.getItem('loginTime')
-      const now = Date.now()
-
-      if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
-        await supabase.auth.signOut()
-        localStorage.removeItem('loginTime')
-        setScreen('login')
-        return
-      }
-
-    if (!loginTime) {
-      localStorage.setItem('loginTime', now.toString())
-    }
-
-    // Check if user has completed onboarding
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', session.user.id)
-      .maybeSingle()
-
-    if (!profile) {
-      // New user — send to onboarding
-      setScreen('onboarding')
-      } else {
-        setScreen('main')
-      }
-
-      const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
-      setUserName(name)
-    } else {
-      localStorage.removeItem('loginTime')
-      setScreen('login')
-    }
-  })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
+        const loginTime = localStorage.getItem('loginTime')
+        const now = Date.now()
+
+        if (loginTime && now - parseInt(loginTime) > 60 * 60 * 1000) {
+          await supabase.auth.signOut()
+          localStorage.removeItem('loginTime')
+          setScreen('landing')
+          return
+        }
+
+        if (!loginTime) {
+          localStorage.setItem('loginTime', now.toString())
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
@@ -85,8 +66,35 @@ export default function App() {
         const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
         setUserName(name)
       } else {
-        setScreen('login')
+        localStorage.removeItem('loginTime')
+        setScreen('landing')
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (_event === 'SIGNED_IN' && session) {
+        await new Promise(r => setTimeout(r, 500))
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (!profile) {
+          setScreen('onboarding')
+        } else {
+          setScreen('main')
+          setShowInvestPopup(true)
+        }
+
+        const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'there'
+        setUserName(name)
+        localStorage.setItem('loginTime', Date.now().toString())
+      } else if (_event === 'SIGNED_OUT') {
+        setScreen('landing')
         setUserName('')
+        localStorage.removeItem('loginTime')
       }
     })
 
@@ -106,8 +114,13 @@ export default function App() {
     return (
       <div className="min-h-screen bg-base flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <img src="/AlgoVest.png" alt="AlgoVest" className="w-16 h-16 object-contain animate-pulse" />
-          <p className="text-text-muted text-sm">Loading...</p>
+          <p
+            className="text-text-main text-2xl font-bold"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            AlgoVest
+          </p>
+          <p className="text-text-muted text-sm animate-pulse">Loading...</p>
         </div>
       </div>
     )
@@ -115,6 +128,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-base font-sans">
+
+      {screen === 'landing' && (
+        <LandingPage onGetStarted={() => setScreen('login')} />
+      )}
 
       {screen === 'login' && (
         <LoginPage
@@ -129,11 +146,7 @@ export default function App() {
 
       {screen === 'main' && showSettings && (
         <SettingsPage
-          onClose={() => {
-            setShowSettings(false)
-            const newName = localStorage.getItem('userName') || userName
-            setUserName(newName)
-          }}
+          onClose={() => setShowSettings(false)}
           onNameUpdate={(newName) => setUserName(newName)}
         />
       )}
@@ -147,7 +160,9 @@ export default function App() {
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-3 text-left"
             >
-              <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
+              <div className="w-8 h-8 rounded-lg bg-primary-tint border border-primary flex items-center justify-center">
+                <span className="text-primary text-xs font-bold">A</span>
+              </div>
               <div>
                 <h1 className="text-sm font-semibold text-text-main">
                   Hey, {userName}
@@ -155,16 +170,18 @@ export default function App() {
                 <p className="text-xs text-text-muted">tap to edit profile</p>
               </div>
             </button>
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut()
-                localStorage.removeItem('loginTime')
-                setScreen('login')
-              }}
-              className="text-text-muted text-xs hover:text-loss-text transition-colors"
-            >
-              Sign out
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  localStorage.removeItem('loginTime')
+                  setScreen('landing')
+                }}
+                className="text-text-muted text-xs hover:text-loss-text transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
 
           {/* Tab content */}
@@ -183,9 +200,7 @@ export default function App() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-3 text-xs font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'text-primary'
-                    : 'text-text-muted'
+                  activeTab === tab.id ? 'text-primary' : 'text-text-muted'
                 }`}
               >
                 {tab.label}
@@ -216,6 +231,7 @@ export default function App() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-primary-tint flex items-center justify-center flex-shrink-0">
+                    <span className="text-primary text-sm font-bold">A</span>
                   </div>
                   <div>
                     <p className="text-text-main text-sm font-semibold">Want to invest today?</p>
@@ -243,7 +259,7 @@ export default function App() {
                   }}
                   className="flex-1 py-2 rounded-lg bg-primary text-base text-sm font-semibold"
                 >
-                  Let's go →
+                  Let's go
                 </button>
               </div>
             </div>
