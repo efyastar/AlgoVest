@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import LandingPage from './components/LandingPage'
 import LoginPage from './components/LoginPage'
 import Onboarding from './components/Onboarding'
+import HomeTab from './components/HomeTab'
 import LearnTab from './components/LearnTab'
 import AdvisorTab from './components/AdvisorTab'
 import PortfolioTab from './components/PortfolioTab'
@@ -11,6 +12,7 @@ import AppsTab from './components/AppsTab'
 import SettingsPage from './components/SettingsPage'
 
 const tabs = [
+  { id: 'home', label: 'Home' },
   { id: 'learn', label: 'Learn' },
   { id: 'advisor', label: 'Advisor' },
   { id: 'portfolio', label: 'Portfolio' },
@@ -20,7 +22,7 @@ const tabs = [
 
 export default function App() {
   const [screen, setScreen] = useState('loading')
-  const [activeTab, setActiveTab] = useState('learn')
+  const [activeTab, setActiveTab] = useState('home')
   const [showInvestPopup, setShowInvestPopup] = useState(false)
   const [userName, setUserName] = useState('')
   const [showSettings, setShowSettings] = useState(false)
@@ -186,6 +188,7 @@ export default function App() {
 
           {/* Tab content */}
           <div className="flex-1 px-4 py-6 md:px-8 lg:px-16 pb-24 md:pb-6">
+            {activeTab === 'home'      && <HomeTab onNavigate={setActiveTab} userName={userName} />}
             {activeTab === 'learn'     && <LearnTab />}
             {activeTab === 'advisor'   && <AdvisorTab />}
             {activeTab === 'portfolio' && <PortfolioTab />}
