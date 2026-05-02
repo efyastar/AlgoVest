@@ -260,7 +260,6 @@ export default function LearnTab() {
       {/* Video grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-4xl mb-3">🎬</p>
           <p className="text-text-main font-medium mb-1">No videos found</p>
           <p className="text-text-muted text-sm">Try different filters</p>
         </div>
@@ -283,8 +282,7 @@ export default function LearnTab() {
                   }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all">
-                  <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                    <span className="text-base text-lg ml-1">▶</span>
+                  <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">                  
                   </div>
                 </div>
                 <div className="absolute top-2 left-2">

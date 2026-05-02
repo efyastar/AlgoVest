@@ -303,7 +303,7 @@ Rules:
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          📋 Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
+          Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
         </button>
       </div>
 

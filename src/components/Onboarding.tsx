@@ -128,11 +128,11 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
             </p>
             <div className="flex flex-col gap-3">
               {[
-                { code: 'USD', name: 'US Dollar', flag: '🇺🇸' },
-                { code: 'GHS', name: 'Ghanaian Cedi', flag: '🇬🇭' },
-                { code: 'EUR', name: 'Euro', flag: '🇪🇺' },
-                { code: 'GBP', name: 'British Pound', flag: '🇬🇧' },
-                { code: 'NGN', name: 'Nigerian Naira', flag: '🇳🇬' },
+                { code: 'USD', name: 'US Dollar' },
+                { code: 'GHS', name: 'Ghanaian Cedi'},
+                { code: 'EUR', name: 'Euro' },
+                { code: 'GBP', name: 'British Pound' },
+                { code: 'NGN', name: 'Nigerian Naira' },
               ].map((c) => (
                 <button
                   key={c.code}
@@ -143,7 +143,6 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
                       : 'border-border bg-elevated text-text-muted'
                   }`}
                 >
-                  <span className="text-xl">{c.flag}</span>
                   <div>
                     <div className="font-medium text-sm">{c.code}</div>
                     <div className="text-xs opacity-70">{c.name}</div>
@@ -169,19 +168,16 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
                   level: 'conservative',
                   title: 'Conservative',
                   desc: 'Low risk, steady growth. Bonds, ETFs, stable stocks.',
-                  emoji: '🛡️'
                 },
                 {
                   level: 'moderate',
                   title: 'Moderate',
                   desc: 'Balanced risk and reward. Mix of stocks and crypto.',
-                  emoji: '⚖️'
                 },
                 {
                   level: 'aggressive',
                   title: 'Aggressive',
                   desc: 'High risk, high reward. Crypto, growth stocks.',
-                  emoji: '🚀'
                 },
               ].map((r) => (
                 <button
@@ -194,7 +190,6 @@ export default function Onboarding({ onFinish }: { onFinish: () => void }) {
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span>{r.emoji}</span>
                     <span className="font-medium text-sm">{r.title}</span>
                   </div>
                   <div className="text-xs opacity-70">{r.desc}</div>

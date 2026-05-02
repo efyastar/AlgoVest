@@ -578,7 +578,7 @@ export default function AppsTab() {
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          📲 Apps
+          Apps
         </button>
         <button
           onClick={() => setActiveView('guide')}
@@ -588,7 +588,7 @@ export default function AppsTab() {
               : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          📋 How to open an account
+          How to open an account
         </button>
       </div>
 
@@ -735,7 +735,7 @@ export default function AppsTab() {
                     : 'bg-elevated border border-border text-text-muted hover:text-text-main'
                 }`}
               >
-                {region === 'general' ? '🌍 General' : region}
+                {region === 'general' ? 'General' : region}
               </button>
             ))}
           </div>
@@ -752,7 +752,7 @@ export default function AppsTab() {
                   <p className="text-text-muted text-xs leading-relaxed">{step.desc}</p>
                   {step.note && (
                     <div className="mt-2 bg-primary-tint border border-primary rounded-lg px-3 py-1.5">
-                      <p className="text-primary text-xs font-medium">💡 {step.note}</p>
+                      <p className="text-primary text-xs font-medium"> {step.note}</p>
                     </div>
                   )}
                 </div>

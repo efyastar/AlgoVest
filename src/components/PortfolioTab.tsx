@@ -313,7 +313,7 @@ export default function PortfolioTab() {
         onClick={() => setShowAdd(!showAdd)}
         className="w-full border border-dashed border-border rounded-xl py-3 text-text-muted text-sm hover:border-primary hover:text-primary transition-colors mb-4"
       >
-        + Add investment
+        Add investment
       </button>
 
       {/* Add investment form */}
@@ -371,7 +371,6 @@ export default function PortfolioTab() {
       <div className="flex flex-col gap-3">
         {investments.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-4xl mb-3">📊</p>
             <p className="text-text-main font-medium mb-1">No investments yet</p>
             <p className="text-text-muted text-sm">Add your first investment above</p>
           </div>
@@ -484,7 +483,7 @@ export default function PortfolioTab() {
                           onClick={() => setAddMoreId(inv.id)}
                           className="text-primary text-xs border border-primary rounded-lg px-3 py-1.5 hover:bg-primary-tint transition-colors"
                         >
-                          + Add more
+                          Add more
                         </button>
                         <button
                           onClick={() => setCloseId(inv.id)}

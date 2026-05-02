@@ -150,7 +150,7 @@ export default function App() {
               <img src="/AlgoVest.png" alt="AlgoVest" className="w-8 h-8 object-contain" />
               <div>
                 <h1 className="text-sm font-semibold text-text-main">
-                  Hey, {userName} 👋
+                  Hey, {userName}
                 </h1>
                 <p className="text-xs text-text-muted">tap to edit profile</p>
               </div>
@@ -216,7 +216,6 @@ export default function App() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-primary-tint flex items-center justify-center flex-shrink-0">
-                    <span className="text-lg">💡</span>
                   </div>
                   <div>
                     <p className="text-text-main text-sm font-semibold">Want to invest today?</p>

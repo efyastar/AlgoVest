@@ -122,9 +122,9 @@ export default function SettingsPage({ onClose, onNameUpdate }: { onClose: () =>
           <label className="text-text-muted text-xs font-medium mb-2 block">RISK LEVEL</label>
           <div className="flex gap-2">
             {[
-              { value: 'conservative', label: '🛡️ Safe' },
-              { value: 'moderate', label: '⚖️ Balanced' },
-              { value: 'aggressive', label: '🚀 Bold' },
+              { value: 'conservative', label: 'Safe' },
+              { value: 'moderate', label: 'Balanced' },
+              { value: 'aggressive', label: 'Bold' },
             ].map(r => (
               <button
                 key={r.value}
