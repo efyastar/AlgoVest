@@ -155,20 +155,21 @@ export default function LoginPage({ onSignUp: _onSignUp, onLogin }: { onSignUp: 
         </div>
 
         {/* Social buttons */}
-        <button
-          onClick={async () => {
-            await supabase.auth.signInWithOAuth({
-              provider: 'google',
-              options: {
-                redirectTo: 'https://algo-vest-b864.vercel.app'
-              }
-            })
-          }}
-          className="w-full flex items-center justify-center gap-3 bg-elevated border border-border rounded-xl py-3 text-text-main text-sm font-medium hover:border-primary transition-colors"
-        >
-          <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
-          Continue with Google
-        </button>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={async () => {
+              await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                  redirectTo: 'https://algo-vest-b864.vercel.app'
+                }
+              })
+            }}
+            className="w-full flex items-center justify-center gap-3 bg-elevated border border-border rounded-xl py-3 text-text-main text-sm font-medium hover:border-primary transition-colors"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
+            Continue with Google
+          </button>
           <button className="w-full flex items-center justify-center gap-3 bg-elevated border border-border rounded-xl py-3 text-text-muted text-sm font-medium cursor-not-allowed opacity-50">
             <svg className="w-4 h-4 fill-text-main" viewBox="0 0 814 1000">
               <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.9 135.4-318 268.1-318 68.2 0 124.6 44.8 166.5 44.8 39.7 0 101.6-47.7 179.9-47.7 28.5 0 130.9 2.6 198.3 99zM554.1 198.6c31.2-36.7 53.3-87.7 53.3-138.7 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.3-55.1 135 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.3-71.4z"/>
