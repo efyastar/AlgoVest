@@ -115,23 +115,8 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
             AlgoVest is your AI-powered investment companion. Get personalized portfolio suggestions, live market alerts and expert guidance — built for investors everywhere.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-16">
-            <button
-              onClick={onGetStarted}
-              className="bg-primary hover:bg-primary-hover text-base font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
-            >
-              Start investing free
-            </button>
-            <button
-              onClick={onGetStarted}
-              className="border border-border text-text-main font-semibold px-8 py-4 rounded-xl hover:border-primary transition-colors text-lg"
-            >
-              Sign in
-            </button>
-          </div>
-
           {/* Stats */}
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16">
+          <div className="flex flex-wrap justify-center gap-8 md:gap-16 mb-16">
             {stats.map((stat, i) => (
               <div key={i} className="text-center">
                 <p className="text-text-main text-2xl font-bold">{stat.value}</p>
@@ -189,7 +174,10 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
                   <div className="hidden lg:block absolute top-6 left-full w-full h-px bg-border z-0" />
                 )}
                 <div className="relative z-10">
-                  <div className="text-primary text-3xl font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  <div
+                    className="text-primary text-3xl font-bold mb-3"
+                    style={{ fontFamily: "'Playfair Display', serif" }}
+                  >
                     {step.number}
                   </div>
                   <p className="text-text-main font-semibold mb-2">{step.title}</p>
@@ -204,7 +192,12 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
         <section className="px-6 md:px-16 py-20 border-t border-border">
           <div className="max-w-2xl mx-auto text-center bg-surface border border-border rounded-3xl p-12">
             <div className="w-16 h-16 rounded-2xl bg-primary-tint border border-primary flex items-center justify-center mx-auto mb-6">
-              <span className="text-primary text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>A</span>
+              <span
+                className="text-primary text-2xl font-bold"
+                style={{ fontFamily: "'Playfair Display', serif" }}
+              >
+                A
+              </span>
             </div>
             <h3
               className="text-3xl font-bold text-text-main mb-4"
@@ -215,12 +208,6 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
             <p className="text-text-muted text-base mb-8 leading-relaxed">
               Join investors across Africa, Europe and the Americas who are using AlgoVest to make better investment decisions every day.
             </p>
-            <button
-              onClick={onGetStarted}
-              className="bg-primary hover:bg-primary-hover text-base font-semibold px-10 py-4 rounded-xl transition-colors text-lg"
-            >
-              Get started for free
-            </button>
           </div>
         </section>
 
