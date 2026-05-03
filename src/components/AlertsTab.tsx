@@ -37,7 +37,7 @@ const getAlertContext = (ticker: string, threshold: number) => {
     `A ${threshold}% drop signals meaningful price movement — could be a buy opportunity or a warning sign.`
 }
 
-const getSuggestedAction = (ticker: string, change: number) => {
+const getSuggestedAction = (_ticker: string, change: number) => {
   if (change > -3) return 'Minor dip — monitor closely before acting'
   if (change > -7) return 'Moderate drop — consider buying in small increments (DCA)'
   if (change > -15) return 'Significant drop — strong potential entry for long-term holders'
