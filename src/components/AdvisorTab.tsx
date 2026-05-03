@@ -31,6 +31,17 @@ const getRiskLabel = (type: string, percentage: number) => {
   return { label: 'Healthy weight', color: 'text-primary', recommended: '10–25%' }
 }
 
+const getRiskExposure = (allocations: Allocation[], budget: string, individualAmount: number) => {
+  const highRiskAmount = allocations
+    .filter(a => a.type === 'crypto' || a.percentage > 25)
+    .reduce((sum, a) => sum + (a.percentage / 100) * individualAmount, 0)
+  const totalHighRiskPct = ((highRiskAmount / parseFloat(budget)) * 100).toFixed(0)
+
+  if (parseFloat(totalHighRiskPct) > 60) return { label: 'High risk portfolio', color: 'text-loss-text', pct: totalHighRiskPct }
+  if (parseFloat(totalHighRiskPct) > 30) return { label: 'Moderate risk portfolio', color: 'text-text-muted', pct: totalHighRiskPct }
+  return { label: 'Conservative portfolio', color: 'text-primary', pct: totalHighRiskPct }
+}
+
 type Allocation = {
   name: string
   percentage: number
@@ -238,24 +249,21 @@ Rules:
   const renderAllocations = (portfolio: Portfolio, colorOffset = 0) => (
     <div className="flex flex-col gap-4">
       {portfolio.allocations.map((item, i) => {
-        const risk = getRiskLabel(item.type, item.percentage)
+        const riskInfo = getRiskLabel(item.type, item.percentage)
         return (
           <div key={i}>
-            {/* Header row */}
             <div className="flex items-center gap-3 mb-1.5">
               <div
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ background: COLORS[(i + colorOffset) % COLORS.length] }}
               />
               <span className="text-text-main text-sm font-medium flex-1">{item.name}</span>
-              <span className={`text-xs font-medium ${risk.color}`}>{risk.label}</span>
+              <span className={`text-xs font-medium ${riskInfo.color}`}>{riskInfo.label}</span>
               <span className="text-text-muted text-xs">{item.percentage}%</span>
               <span className="text-text-main text-sm font-semibold font-mono">
                 {CURRENCIES[currency]}{((item.percentage / 100) * portfolio.amount).toFixed(2)}
               </span>
             </div>
-
-            {/* Progress bar */}
             <div className="w-full h-2 bg-elevated rounded-full ml-6 mb-1">
               <div
                 className="h-2 rounded-full transition-all duration-500"
@@ -265,13 +273,9 @@ Rules:
                 }}
               />
             </div>
-
-            {/* Reason + recommended range */}
             <div className="ml-6 flex items-start justify-between gap-4">
               <p className="text-text-muted text-xs leading-relaxed flex-1">{item.reason}</p>
-              <p className="text-text-hint text-xs flex-shrink-0">
-                Recommended: {risk.recommended}
-              </p>
+              <p className="text-text-hint text-xs flex-shrink-0">Recommended: {riskInfo.recommended}</p>
             </div>
           </div>
         )
@@ -341,8 +345,10 @@ Rules:
             <div className="mb-5">
               <label className="text-text-muted text-xs font-medium mb-1 block">RISK LEVEL</label>
               <p className="text-text-hint text-xs mb-2">
-                {risk === 'conservative' ? 'Conservative — 40% individual stocks, 60% index funds. Lower volatility, steady growth.'
-                  : risk === 'moderate' ? 'Moderate — 50/50 split. Balanced between growth and stability.'
+                {risk === 'conservative'
+                  ? 'Conservative — 40% individual stocks, 60% index funds. Lower volatility, steady growth.'
+                  : risk === 'moderate'
+                  ? 'Moderate — 50/50 split. Balanced between growth and stability.'
                   : 'Aggressive — 70% individual stocks, 30% index funds. Higher potential return, higher risk.'}
               </p>
               <div className="flex gap-2">
@@ -365,7 +371,7 @@ Rules:
               </div>
             </div>
 
-            {/* Show tickers for experienced investors */}
+            {/* Tickers for experienced investors */}
             {!isNewInvestor && (
               <div className="mb-5 bg-elevated rounded-xl p-3">
                 <p className="text-text-muted text-xs font-medium mb-2">YOUR SAVED TICKERS</p>
@@ -392,9 +398,52 @@ Rules:
             </button>
           </div>
 
-          {/* Result */}
+          {/* Results */}
           {result && (
             <div className="flex flex-col gap-4">
+
+              {/* Risk analysis */}
+              {(() => {
+                const splits: Record<string, { individual: number, longterm: number }> = {
+                  conservative: { individual: 40, longterm: 60 },
+                  moderate: { individual: 50, longterm: 50 },
+                  aggressive: { individual: 70, longterm: 30 },
+                }
+                const split = splits[risk] || splits.moderate
+                const individualAmount = (split.individual / 100) * parseFloat(budget)
+                const exposure = getRiskExposure(result.individual.allocations, budget, individualAmount)
+
+                return (
+                  <div className="bg-surface border border-border rounded-2xl p-5">
+                    <p className="text-text-muted text-xs font-medium mb-3">PORTFOLIO RISK ANALYSIS</p>
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="bg-elevated rounded-xl p-3 text-center">
+                        <p className={`text-lg font-bold ${exposure.color}`}>{exposure.pct}%</p>
+                        <p className="text-text-hint text-xs mt-0.5">High risk</p>
+                      </div>
+                      <div className="bg-elevated rounded-xl p-3 text-center">
+                        <p className="text-text-main text-lg font-bold">
+                          {Math.round((result.longterm.amount / parseFloat(budget)) * 100)}%
+                        </p>
+                        <p className="text-text-hint text-xs mt-0.5">Stable/ETFs</p>
+                      </div>
+                      <div className="bg-elevated rounded-xl p-3 text-center">
+                        <p className="text-text-main text-lg font-bold capitalize">{risk}</p>
+                        <p className="text-text-hint text-xs mt-0.5">Risk level</p>
+                      </div>
+                    </div>
+                    <p className={`text-xs font-medium ${exposure.color} mb-1`}>{exposure.label}</p>
+                    <p className="text-text-muted text-xs leading-relaxed">
+                      {risk === 'conservative'
+                        ? `Your portfolio is weighted toward stability — ${Math.round((result.longterm.amount / parseFloat(budget)) * 100)}% in index funds means steady compound growth with lower volatility.`
+                        : risk === 'aggressive'
+                        ? `You have ${exposure.pct}% in high-growth assets. Higher potential return but expect more price swings — only invest what you can afford to hold long term.`
+                        : `A balanced approach — half in growth stocks for upside, half in index funds for stability. This is the most common allocation for long-term investors.`
+                      }
+                    </p>
+                  </div>
+                )
+              })()}
 
               {/* Individual stocks */}
               <div className="bg-surface border border-border rounded-2xl p-5">
@@ -446,7 +495,6 @@ Rules:
                 </div>
                 <p className="text-text-main text-sm leading-relaxed">{result.summary}</p>
 
-                {/* Risk summary */}
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="bg-elevated rounded-xl p-3 text-center">
                     <p className="text-text-main text-sm font-bold">{CURRENCIES[currency]}{parseFloat(budget).toLocaleString()}</p>
