@@ -272,15 +272,15 @@ export default function AlertsTab() {
     setLoadingAi(prev => ({ ...prev, [alert.id]: true }))
     const change = parseFloat(alert.fired_message?.match(/(\d+\.?\d*)%/)?.[1] || '5')
     const prompt = `You are Afrifa, a direct financial advisor.
-${alert.asset} (${alert.ticker}) has dropped ${change}% in 24 hours and is now at ${alert.current_price}.
-The user set an alert for a ${alert.threshold}% drop threshold.
+      ${alert.asset} (${alert.ticker}) has dropped ${change}% in 24 hours and is now at ${alert.current_price}.
+      The user set an alert for a ${alert.threshold}% drop threshold.
 
-In exactly 3 short sentences:
-1. Explain what this price drop likely means (market context)
-2. Give a specific buy/hold/wait recommendation with reasoning
-3. Suggest a specific price target or next action
+      In exactly 3 short sentences:
+      1. Explain what this price drop likely means (market context)
+      2. Give a specific buy/hold/wait recommendation with reasoning
+      3. Suggest a specific price target or next action
 
-Be direct, specific and confident. Speak as Afrifa.`
+      Be direct, specific and confident. Speak as Afrifa.`
 
     try {
       const resp = await fetch(
@@ -330,14 +330,8 @@ Be direct, specific and confident. Speak as Afrifa.`
 
       {/* No phone number warning */}
       {!userPhone && (
-        <div className="bg-elevated border border-border rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
-          <p className="text-text-muted text-xs">Add your phone number to receive SMS alerts</p>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('openSettings'))}
-            className="text-primary text-xs font-medium"
-          >
-            Add number
-          </button>
+        <div className="bg-elevated border border-border rounded-xl px-4 py-3 mb-4">
+          <p className="text-text-muted text-xs">Add your phone number to receive SMS alerts — tap your name in the header to open settings</p>
         </div>
       )}
 
