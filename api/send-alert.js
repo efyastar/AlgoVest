@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       from: 'AlgoVest <onboarding@resend.dev>',
-      to: [to],
+      to: ['fosuafia08@gmail.com'],
       subject: `Alert: ${asset} dropped ${Math.abs(change).toFixed(1)}%`,
       html: `
         <div style="font-family: Inter, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0a0a0a; color: #f5f5f5; border-radius: 16px;">
