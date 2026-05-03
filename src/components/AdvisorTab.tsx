@@ -23,6 +23,14 @@ const PLATFORM_SUGGESTIONS: Record<string, { name: string, url: string, desc: st
   ],
 }
 
+const getRiskLabel = (type: string, percentage: number) => {
+  if (type === 'crypto') return { label: 'High risk', color: 'text-loss-text', recommended: '5–10%' }
+  if (type === 'etfs') return { label: 'Low risk', color: 'text-primary', recommended: '30–50%' }
+  if (percentage > 30) return { label: 'High exposure', color: 'text-loss-text', recommended: '15–25%' }
+  if (percentage > 20) return { label: 'Moderate exposure', color: 'text-text-muted', recommended: '15–25%' }
+  return { label: 'Healthy weight', color: 'text-primary', recommended: '10–25%' }
+}
+
 type Allocation = {
   name: string
   percentage: number
@@ -84,17 +92,12 @@ export default function AdvisorTab() {
 
   const fetchSavedPlans = async () => {
     const { data, error } = await supabase
-      .from('saved_plans')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from('saved_plans').select('*').order('created_at', { ascending: false })
     if (!error && data) setSavedPlans(data)
   }
 
   const getAISuggestion = async () => {
-    if (!budget || parseFloat(budget) <= 0) {
-      setError('Please enter a valid budget')
-      return
-    }
+    if (!budget || parseFloat(budget) <= 0) { setError('Please enter a valid budget'); return }
     setError('')
     setLoading(true)
     setResult(null)
@@ -109,10 +112,8 @@ export default function AdvisorTab() {
     const longtermAmount = (split.longterm / 100) * parseFloat(budget)
 
     const individualStocks = isNewInvestor
-      ? risk === 'conservative'
-        ? 'AAPL, MSFT, GOOGL, UNH, META'
-        : risk === 'aggressive'
-        ? 'NVDA, TSLA, PLTR, BTC, AVGO'
+      ? risk === 'conservative' ? 'AAPL, MSFT, GOOGL, UNH, META'
+        : risk === 'aggressive' ? 'NVDA, TSLA, PLTR, BTC, AVGO'
         : 'NVDA, TSLA, AVGO, PLTR, GOOGL, META'
       : individualTickers
 
@@ -124,10 +125,10 @@ Risk level: ${risk}
 Split: ${split.individual}% individual (${CURRENCIES[currency]}${individualAmount.toFixed(2)}) and ${split.longterm}% long-term (${CURRENCIES[currency]}${longtermAmount.toFixed(2)})
 
 INDIVIDUAL STOCKS — you MUST use ALL of these tickers: ${individualStocks}
-Distribute the ${CURRENCIES[currency]}${individualAmount.toFixed(2)} across ALL of them. Do not skip any ticker. Adjust percentages based on risk level ${risk} but include every single one.
+Distribute the ${CURRENCIES[currency]}${individualAmount.toFixed(2)} across ALL of them. Adjust percentages based on risk level ${risk} but include every single one.
 
 LONG TERM — you MUST use ALL of these tickers: ${longtermStocks}
-Distribute the ${CURRENCIES[currency]}${longtermAmount.toFixed(2)} across ALL of them. Do not skip any ticker.
+Distribute the ${CURRENCIES[currency]}${longtermAmount.toFixed(2)} across ALL of them.
 
 Respond ONLY with this exact JSON, no markdown, no backticks:
 {
@@ -135,24 +136,24 @@ Respond ONLY with this exact JSON, no markdown, no backticks:
     "label": "Individual Stocks",
     "amount": ${individualAmount.toFixed(2)},
     "allocations": [
-      {"name": "NVDA (Nvidia)", "percentage": 25, "reason": "1 line reason", "type": "stocks"}
+      {"name": "NVDA (Nvidia)", "percentage": 25, "reason": "1 line specific reason why this percentage for this risk level", "type": "stocks"}
     ]
   },
   "longterm": {
     "label": "Long Term / Index Funds",
     "amount": ${longtermAmount.toFixed(2)},
     "allocations": [
-      {"name": "VOO (S&P 500 ETF)", "percentage": 40, "reason": "1 line reason", "type": "etfs"}
+      {"name": "VOO (S&P 500 ETF)", "percentage": 40, "reason": "1 line specific reason why this percentage for this risk level", "type": "etfs"}
     ]
   },
-  "summary": "2-3 friendly sentences from Afrifa explaining why this split works for the user"
+  "summary": "2-3 friendly sentences from Afrifa explaining the strategy and what the user should expect"
 }
 
 Rules:
-- individual allocations percentages must sum to 100
-- longterm allocations percentages must sum to 100
-- use ALL tickers provided, do not skip any
-- be specific with real tickers`
+- individual percentages must sum to 100
+- longterm percentages must sum to 100
+- reasons must explain WHY this allocation fits the risk level
+- use ALL tickers provided`
 
     let text = ''
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -162,9 +163,7 @@ Rules:
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
           }
         )
         const data = await resp.json()
@@ -188,11 +187,7 @@ Rules:
       }
     }
 
-    if (!text) {
-      setError('Afrifa could not respond. Please try again.')
-      setLoading(false)
-      return
-    }
+    if (!text) { setError('Afrifa could not respond. Please try again.'); setLoading(false); return }
 
     try {
       text = text.replace(/```json|```/g, '').trim()
@@ -206,7 +201,6 @@ Rules:
 
   const savePlan = async () => {
     if (!result) return
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -218,22 +212,13 @@ Rules:
     const { data, error } = await supabase
       .from('saved_plans')
       .insert({
-        user_id: user.id,
-        budget: parseFloat(budget),
-        currency,
-        risk,
-        goal: 'split',
-        allocations: allAllocations,
-        summary: result.summary,
-        date: new Date().toLocaleDateString(),
+        user_id: user.id, budget: parseFloat(budget), currency, risk,
+        goal: 'split', allocations: allAllocations,
+        summary: result.summary, date: new Date().toLocaleDateString(),
       })
-      .select()
-      .single()
+      .select().single()
 
-    if (!error && data) {
-      setSavedPlans(prev => [data, ...prev])
-      setView('plans')
-    }
+    if (!error && data) { setSavedPlans(prev => [data, ...prev]); setView('plans') }
   }
 
   const getPlatforms = (allocations: Allocation[]) => {
@@ -251,32 +236,46 @@ Rules:
   }
 
   const renderAllocations = (portfolio: Portfolio, colorOffset = 0) => (
-    <div className="flex flex-col gap-3">
-      {portfolio.allocations.map((item, i) => (
-        <div key={i}>
-          <div className="flex items-center gap-3 mb-1">
-            <div
-              className="w-3 h-3 rounded-full flex-shrink-0"
-              style={{ background: COLORS[(i + colorOffset) % COLORS.length] }}
-            />
-            <span className="text-text-main text-sm font-medium flex-1">{item.name}</span>
-            <span className="text-text-muted text-xs">{item.percentage}%</span>
-            <span className="text-text-main text-sm font-semibold font-mono">
-              {CURRENCIES[currency]}{((item.percentage / 100) * portfolio.amount).toFixed(2)}
-            </span>
+    <div className="flex flex-col gap-4">
+      {portfolio.allocations.map((item, i) => {
+        const risk = getRiskLabel(item.type, item.percentage)
+        return (
+          <div key={i}>
+            {/* Header row */}
+            <div className="flex items-center gap-3 mb-1.5">
+              <div
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ background: COLORS[(i + colorOffset) % COLORS.length] }}
+              />
+              <span className="text-text-main text-sm font-medium flex-1">{item.name}</span>
+              <span className={`text-xs font-medium ${risk.color}`}>{risk.label}</span>
+              <span className="text-text-muted text-xs">{item.percentage}%</span>
+              <span className="text-text-main text-sm font-semibold font-mono">
+                {CURRENCIES[currency]}{((item.percentage / 100) * portfolio.amount).toFixed(2)}
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full h-2 bg-elevated rounded-full ml-6 mb-1">
+              <div
+                className="h-2 rounded-full transition-all duration-500"
+                style={{
+                  width: `${item.percentage}%`,
+                  background: COLORS[(i + colorOffset) % COLORS.length]
+                }}
+              />
+            </div>
+
+            {/* Reason + recommended range */}
+            <div className="ml-6 flex items-start justify-between gap-4">
+              <p className="text-text-muted text-xs leading-relaxed flex-1">{item.reason}</p>
+              <p className="text-text-hint text-xs flex-shrink-0">
+                Recommended: {risk.recommended}
+              </p>
+            </div>
           </div>
-          <div className="w-full h-1.5 bg-elevated rounded-full ml-6">
-            <div
-              className="h-1.5 rounded-full"
-              style={{
-                width: `${item.percentage}%`,
-                background: COLORS[(i + colorOffset) % COLORS.length]
-              }}
-            />
-          </div>
-          <p className="text-text-muted text-xs mt-1 ml-6">{item.reason}</p>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 
@@ -288,19 +287,15 @@ Rules:
         <button
           onClick={() => setView('form')}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-            view === 'form'
-              ? 'bg-primary text-base'
-              : 'bg-elevated border border-border text-text-muted'
+            view === 'form' ? 'bg-primary text-base' : 'bg-elevated border border-border text-text-muted'
           }`}
         >
-          ✦ Ask Afrifa
+          Ask Afrifa
         </button>
         <button
           onClick={() => setView('plans')}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-            view === 'plans'
-              ? 'bg-primary text-base'
-              : 'bg-elevated border border-border text-text-muted'
+            view === 'plans' ? 'bg-primary text-base' : 'bg-elevated border border-border text-text-muted'
           }`}
         >
           Saved Plans {savedPlans.length > 0 && `(${savedPlans.length})`}
@@ -319,18 +314,13 @@ Rules:
               </label>
               <div className="flex gap-2">
                 <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  value={currency} onChange={(e) => setCurrency(e.target.value)}
                   className="bg-elevated border border-border rounded-xl px-3 py-3 text-text-main text-sm outline-none focus:border-primary"
                 >
-                  {Object.keys(CURRENCIES).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {Object.keys(CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <input
-                  type="number"
-                  placeholder="1000"
-                  value={budget}
+                  type="number" placeholder="1000" value={budget}
                   onChange={(e) => setBudget(e.target.value)}
                   className="flex-1 bg-elevated border border-border rounded-xl px-4 py-3 text-text-main text-2xl font-semibold outline-none focus:border-primary transition-colors"
                 />
@@ -338,8 +328,7 @@ Rules:
               <div className="flex gap-2 mt-2 flex-wrap">
                 {['100', '500', '1000', '5000'].map(a => (
                   <button
-                    key={a}
-                    onClick={() => setBudget(a)}
+                    key={a} onClick={() => setBudget(a)}
                     className="px-3 py-1.5 rounded-lg border border-border bg-elevated text-text-muted text-xs hover:border-primary hover:text-text-main transition-colors"
                   >
                     {CURRENCIES[currency]}{a}
@@ -350,18 +339,20 @@ Rules:
 
             {/* Risk level */}
             <div className="mb-5">
-              <label className="text-text-muted text-xs font-medium mb-2 block">
-                RISK LEVEL
-              </label>
+              <label className="text-text-muted text-xs font-medium mb-1 block">RISK LEVEL</label>
+              <p className="text-text-hint text-xs mb-2">
+                {risk === 'conservative' ? 'Conservative — 40% individual stocks, 60% index funds. Lower volatility, steady growth.'
+                  : risk === 'moderate' ? 'Moderate — 50/50 split. Balanced between growth and stability.'
+                  : 'Aggressive — 70% individual stocks, 30% index funds. Higher potential return, higher risk.'}
+              </p>
               <div className="flex gap-2">
                 {[
-                  { value: 'conservative', label: '🛡️ Safe' },
-                  { value: 'moderate', label: '⚖️ Balanced' },
-                  { value: 'aggressive', label: '🚀 Bold' },
+                  { value: 'conservative', label: 'Safe' },
+                  { value: 'moderate', label: 'Balanced' },
+                  { value: 'aggressive', label: 'Bold' },
                 ].map(r => (
                   <button
-                    key={r.value}
-                    onClick={() => setRisk(r.value)}
+                    key={r.value} onClick={() => setRisk(r.value)}
                     className={`flex-1 py-2.5 rounded-xl border text-xs font-medium transition-all ${
                       risk === r.value
                         ? 'border-primary bg-primary-tint text-text-main'
@@ -391,23 +382,13 @@ Rules:
               </div>
             )}
 
-            {error && (
-              <p className="text-loss-text text-xs mb-3">{error}</p>
-            )}
+            {error && <p className="text-loss-text text-xs mb-3">{error}</p>}
 
             <button
-              onClick={getAISuggestion}
-              disabled={loading}
+              onClick={getAISuggestion} disabled={loading}
               className="w-full bg-primary hover:bg-primary-hover text-base font-semibold py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>
-                  <span className="animate-spin">⟳</span>
-                  Afrifa is thinking...
-                </>
-              ) : (
-                '✦ Ask Afrifa'
-              )}
+              {loading ? 'Afrifa is thinking...' : 'Ask Afrifa'}
             </button>
           </div>
 
@@ -417,29 +398,41 @@ Rules:
 
               {/* Individual stocks */}
               <div className="bg-surface border border-border rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="text-text-main font-semibold">Individual Stocks</p>
-                    <p className="text-text-muted text-xs mt-0.5">Higher risk · Higher reward</p>
+                    <p className="text-text-muted text-xs mt-0.5">Higher risk · Higher potential return</p>
                   </div>
-                  <span className="text-primary font-semibold font-mono text-lg">
-                    {CURRENCIES[currency]}{result.individual.amount.toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-primary font-semibold font-mono text-lg">
+                      {CURRENCIES[currency]}{result.individual.amount.toFixed(2)}
+                    </span>
+                    <p className="text-text-hint text-xs">
+                      {Math.round((result.individual.amount / parseFloat(budget)) * 100)}% of budget
+                    </p>
+                  </div>
                 </div>
+                <div className="h-px bg-border mb-4" />
                 {renderAllocations(result.individual, 0)}
               </div>
 
               {/* Long term */}
               <div className="bg-surface border border-border rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="text-text-main font-semibold">Long Term / Index Funds</p>
-                    <p className="text-text-muted text-xs mt-0.5">Lower risk · Steady growth</p>
+                    <p className="text-text-muted text-xs mt-0.5">Lower risk · Steady compound growth</p>
                   </div>
-                  <span className="text-primary font-semibold font-mono text-lg">
-                    {CURRENCIES[currency]}{result.longterm.amount.toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-primary font-semibold font-mono text-lg">
+                      {CURRENCIES[currency]}{result.longterm.amount.toFixed(2)}
+                    </span>
+                    <p className="text-text-hint text-xs">
+                      {Math.round((result.longterm.amount / parseFloat(budget)) * 100)}% of budget
+                    </p>
+                  </div>
                 </div>
+                <div className="h-px bg-border mb-4" />
                 {renderAllocations(result.longterm, 3)}
               </div>
 
@@ -449,19 +442,36 @@ Rules:
                   <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
                     <span className="text-base text-xs font-bold">A</span>
                   </div>
-                  <p className="text-text-muted text-xs font-medium">AFRIFA SAYS</p>
+                  <p className="text-text-muted text-xs font-medium">AFRIFA'S STRATEGY EXPLAINED</p>
                 </div>
                 <p className="text-text-main text-sm leading-relaxed">{result.summary}</p>
+
+                {/* Risk summary */}
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="bg-elevated rounded-xl p-3 text-center">
+                    <p className="text-text-main text-sm font-bold">{CURRENCIES[currency]}{parseFloat(budget).toLocaleString()}</p>
+                    <p className="text-text-hint text-xs mt-0.5">Total budget</p>
+                  </div>
+                  <div className="bg-elevated rounded-xl p-3 text-center">
+                    <p className="text-text-main text-sm font-bold capitalize">{risk}</p>
+                    <p className="text-text-hint text-xs mt-0.5">Risk level</p>
+                  </div>
+                  <div className="bg-elevated rounded-xl p-3 text-center">
+                    <p className="text-text-main text-sm font-bold">
+                      {result.individual.allocations.length + result.longterm.allocations.length}
+                    </p>
+                    <p className="text-text-hint text-xs mt-0.5">Assets</p>
+                  </div>
+                </div>
               </div>
 
               {/* Where to buy */}
               <div className="bg-surface border border-border rounded-2xl p-5">
-                <p className="text-text-muted text-xs font-medium mb-3">WHERE AFRIFA SUGGESTS YOU BUY</p>
+                <p className="text-text-muted text-xs font-medium mb-3">WHERE TO BUY</p>
                 <div className="grid grid-cols-2 gap-2">
                   {getPlatforms([...result.individual.allocations, ...result.longterm.allocations]).map((p, i) => (
                     <button
-                      key={i}
-                      onClick={() => window.open(p.url, '_blank')}
+                      key={i} onClick={() => window.open(p.url, '_blank')}
                       className="bg-elevated border border-border rounded-xl p-3 text-left hover:border-primary transition-colors"
                     >
                       <p className="text-text-main text-sm font-medium">{p.name}</p>
@@ -510,21 +520,21 @@ Rules:
                         {CURRENCIES[plan.currency]}{plan.budget?.toLocaleString()}
                       </p>
                       <p className="text-text-muted text-xs mt-0.5">
-                        {plan.date} · {plan.risk} risk
+                        {plan.date} · {plan.risk} risk · {plan.allocations?.length} assets
                       </p>
                     </div>
-                    <span className="text-xs bg-primary-tint text-primary px-3 py-1 rounded-full font-medium">
-                      {plan.allocations?.length} assets
+                    <span className="text-xs bg-primary-tint text-primary px-3 py-1 rounded-full font-medium capitalize">
+                      {plan.risk}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {plan.allocations?.map((a, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ background: COLORS[i % COLORS.length] }}
-                        />
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
                         <span className="text-text-muted text-xs flex-1">{a.name}</span>
+                        <span className={`text-xs ${a.section === 'individual' ? 'text-text-hint' : 'text-primary'}`}>
+                          {a.section === 'individual' ? 'Stock' : 'ETF'}
+                        </span>
                         <span className="text-text-main text-xs font-mono">{a.percentage}%</span>
                         <span className="text-text-main text-xs font-mono">
                           {CURRENCIES[plan.currency]}{((a.percentage / 100) * plan.budget).toFixed(2)}
