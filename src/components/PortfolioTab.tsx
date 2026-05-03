@@ -101,8 +101,11 @@ export default function PortfolioTab() {
     setFetchingPrices(false)
   }
 
-  const totalInvested = investments.filter(i => i.status === 'active').reduce((sum, i) => sum + i.amount, 0)
-  const totalCurrentValue = investments.filter(i => i.status === 'active').reduce((sum, i) => {
+  const activeInvestments = investments.filter(i => i.status === 'active')
+  const closedInvestments = investments.filter(i => i.status === 'closed')
+
+  const totalInvested = activeInvestments.reduce((sum, i) => sum + i.amount, 0)
+  const totalCurrentValue = activeInvestments.reduce((sum, i) => {
     if (i.current_price && i.purchase_price && i.purchase_price > 0) {
       return sum + ((i.amount / i.purchase_price) * i.current_price)
     }
@@ -111,6 +114,39 @@ export default function PortfolioTab() {
   const totalPL = totalCurrentValue - totalInvested
   const totalPLPct = totalInvested > 0 ? ((totalPL / totalInvested) * 100) : 0
 
+  // Allocation distribution
+  const allocationData = activeInvestments.map((inv, i) => {
+    const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4']
+    const currentVal = inv.current_price && inv.purchase_price && inv.purchase_price > 0
+      ? (inv.amount / inv.purchase_price) * inv.current_price
+      : inv.amount
+    return {
+      name: inv.ticker || inv.name.slice(0, 4).toUpperCase(),
+      fullName: inv.name,
+      value: currentVal,
+      pct: totalCurrentValue > 0 ? ((currentVal / totalCurrentValue) * 100).toFixed(1) : '0',
+      color: colors[i % colors.length],
+    }
+  })
+
+  // Performance story
+  const getPerformanceStory = () => {
+    if (activeInvestments.length === 0) return null
+    if (totalPL > 0) return `You've made ${CURRENCIES['USD']}${totalPL.toFixed(2)} since you started investing`
+    if (totalPL < 0) return `You're down ${CURRENCIES['USD']}${Math.abs(totalPL).toFixed(2)} — markets fluctuate, stay focused`
+    return 'Your portfolio is breaking even — keep investing consistently'
+  }
+
+  // Diversification grade
+  const getDiversificationGrade = () => {
+    const count = activeInvestments.length
+    if (count === 0) return { grade: '-', label: 'No holdings', color: 'text-text-muted' }
+    if (count === 1) return { grade: 'D', label: 'Concentrated — consider diversifying', color: 'text-loss-text' }
+    if (count === 2) return { grade: 'C', label: 'Low diversification', color: 'text-loss-text' }
+    if (count <= 4) return { grade: 'B', label: 'Moderate diversification', color: 'text-text-muted' }
+    return { grade: 'A', label: 'Well diversified', color: 'text-primary' }
+  }
+
   const getRiskLabel = (plPct: number) => {
     if (plPct > 10) return { label: 'Strong performer', color: 'text-primary' }
     if (plPct > 0) return { label: 'Performing well', color: 'text-primary' }
@@ -118,6 +154,9 @@ export default function PortfolioTab() {
     if (plPct > -15) return { label: 'Underperforming', color: 'text-loss-text' }
     return { label: 'Consider reviewing', color: 'text-loss-text' }
   }
+
+  const diversification = getDiversificationGrade()
+  const performanceStory = getPerformanceStory()
 
   const addInvestment = async () => {
     if (!name || !amount) return
@@ -192,7 +231,7 @@ export default function PortfolioTab() {
   const getAISuggestion = async () => {
     setLoadingSuggestion(true)
     setAiSuggestion('')
-    const activeInvestments = investments.filter(i => i.status === 'active')
+
     if (activeInvestments.length === 0) {
       setAiSuggestion('Add some investments first and Afrifa will review them for you!')
       setLoadingSuggestion(false)
@@ -209,16 +248,17 @@ export default function PortfolioTab() {
       return `${i.name} (${i.ticker || 'no ticker'}) - invested ${CURRENCIES[i.currency]}${i.amount} - current value ${CURRENCIES[i.currency]}${currentVal} (${pl}% change)`
     }).join(', ')
 
-    const prompt = `You are Afrifa, a direct financial advisor. 
-    User portfolio: ${investmentSummary}
-    Total invested: ${CURRENCIES['USD']}${totalInvested} | Current value: ${CURRENCIES['USD']}${totalCurrentValue.toFixed(0)} | P&L: ${totalPL >= 0 ? '+' : ''}${CURRENCIES['USD']}${totalPL.toFixed(0)} (${totalPLPct.toFixed(1)}%)
-    
-    In 3 sentences max:
-    1. Identify the worst performing asset and suggest whether to sell or hold
-    2. Identify the best performing asset and suggest whether to take profits or hold
-    3. One specific actionable recommendation
-    
-    Be direct, specific and speak as Afrifa.`
+    const prompt = `You are Afrifa, a direct financial advisor.
+User portfolio: ${investmentSummary}
+Total invested: ${CURRENCIES['USD']}${totalInvested} | Current value: ${CURRENCIES['USD']}${totalCurrentValue.toFixed(0)} | P&L: ${totalPL >= 0 ? '+' : ''}${CURRENCIES['USD']}${totalPL.toFixed(0)} (${totalPLPct.toFixed(1)}%)
+Diversification: ${diversification.grade} — ${diversification.label}
+
+In 3 sentences max:
+1. Identify the worst performing asset and suggest whether to sell or hold
+2. Identify the best performing asset and suggest whether to take profits or hold
+3. One specific actionable recommendation based on the diversification grade
+
+Be direct, specific and speak as Afrifa.`
 
     try {
       const resp = await fetch(
@@ -261,58 +301,104 @@ export default function PortfolioTab() {
     )
   }
 
-  const activeInvestments = investments.filter(i => i.status === 'active')
-  const closedInvestments = investments.filter(i => i.status === 'closed')
-
   return (
     <div className="w-full max-w-2xl mx-auto">
 
-      {/* Summary cards */}
+      {/* Performance story */}
+      {performanceStory && (
+        <div className={`rounded-2xl px-5 py-4 mb-4 border ${totalPL >= 0 ? 'bg-primary-tint border-primary' : 'bg-loss-bg border-loss-text'}`}>
+          <p className={`text-sm font-semibold ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+            {totalPL >= 0 ? '↑' : '↓'} {performanceStory}
+          </p>
+          <p className="text-text-muted text-xs mt-1">
+            Total return: {totalPL >= 0 ? '+' : ''}{totalPLPct.toFixed(2)}% · {activeInvestments.length} active holding{activeInvestments.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      )}
+
+      {/* Main summary */}
       <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <p className="text-text-muted text-xs font-medium">PORTFOLIO SUMMARY</p>
           {fetchingPrices && <p className="text-text-hint text-xs animate-pulse">Updating prices...</p>}
         </div>
 
+        {/* Key metrics */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div>
             <p className="text-text-muted text-xs mb-1">Invested</p>
-            <p className="text-text-main font-bold text-lg font-mono">${totalInvested.toLocaleString()}</p>
+            <p className="text-text-main font-bold text-xl font-mono">${totalInvested.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-text-muted text-xs mb-1">Value now</p>
-            <p className="text-text-main font-bold text-lg font-mono">${totalCurrentValue.toFixed(0)}</p>
+            <p className="text-text-main font-bold text-xl font-mono">${totalCurrentValue.toFixed(0)}</p>
           </div>
           <div>
-            <p className="text-text-muted text-xs mb-1">Total P&L</p>
+            <p className="text-text-muted text-xs mb-1">Total return</p>
             <div className="flex items-center gap-0.5">
-              <span className={`text-sm ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+              <span className={`${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
                 {totalPL >= 0 ? '↑' : '↓'}
               </span>
-              <p className={`font-bold text-lg font-mono ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                ${Math.abs(totalPL).toFixed(0)}
+              <p className={`font-bold text-xl font-mono ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                {Math.abs(totalPLPct).toFixed(1)}%
               </p>
             </div>
             <p className={`text-xs font-mono ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-              {totalPL >= 0 ? '+' : ''}{totalPLPct.toFixed(2)}% all time
+              {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(0)}
             </p>
           </div>
         </div>
 
-        {/* Portfolio health bar */}
+        {/* Diversification grade */}
         {activeInvestments.length > 0 && (
-          <div className={`rounded-xl px-3 py-2 ${totalPL >= 0 ? 'bg-primary-tint border border-primary' : 'bg-loss-bg border border-loss-text'}`}>
-            <p className={`text-xs font-medium ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-              {totalPL >= 0
-                ? `Portfolio is up ${totalPLPct.toFixed(2)}% — your investments are growing`
-                : `Portfolio is down ${Math.abs(totalPLPct).toFixed(2)}% — consider reviewing underperformers`
-              }
-            </p>
+          <div className="flex items-center justify-between py-3 border-t border-border">
+            <div>
+              <p className="text-text-muted text-xs">Diversification</p>
+              <p className={`text-xs font-medium mt-0.5 ${diversification.color}`}>{diversification.label}</p>
+            </div>
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+              diversification.grade === 'A' ? 'bg-primary-tint border-primary' :
+              diversification.grade === 'B' ? 'bg-elevated border-border' :
+              'bg-loss-bg border-loss-text'
+            }`}>
+              <span className={`text-lg font-bold ${
+                diversification.grade === 'A' ? 'text-primary' :
+                diversification.grade === 'B' ? 'text-text-main' :
+                'text-loss-text'
+              }`}>{diversification.grade}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Allocation distribution */}
+        {allocationData.length > 0 && (
+          <div className="pt-3 border-t border-border">
+            <p className="text-text-muted text-xs font-medium mb-3">ALLOCATION</p>
+            {/* Bar */}
+            <div className="flex w-full h-2 rounded-full overflow-hidden mb-3 gap-0.5">
+              {allocationData.map((item, i) => (
+                <div
+                  key={i}
+                  className="h-full rounded-full"
+                  style={{ width: `${item.pct}%`, background: item.color }}
+                />
+              ))}
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3">
+              {allocationData.map((item, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                  <span className="text-text-muted text-xs">{item.name}</span>
+                  <span className="text-text-main text-xs font-medium">{item.pct}%</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Afrifa Portfolio Review */}
+      {/* Afrifa review */}
       <div className="bg-surface border border-border rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -326,7 +412,7 @@ export default function PortfolioTab() {
             disabled={loadingSuggestion}
             className="text-primary text-xs font-medium disabled:opacity-50"
           >
-            {loadingSuggestion ? 'Afrifa is thinking...' : 'Ask Afrifa'}
+            {loadingSuggestion ? 'Thinking...' : 'Ask Afrifa'}
           </button>
         </div>
         {aiSuggestion ? (
@@ -336,7 +422,7 @@ export default function PortfolioTab() {
         )}
       </div>
 
-      {/* Add investment button */}
+      {/* Add investment */}
       <button
         onClick={() => setShowAdd(!showAdd)}
         className="w-full border border-dashed border-border rounded-xl py-3 text-text-muted text-sm hover:border-primary hover:text-primary transition-colors mb-4"
@@ -344,7 +430,6 @@ export default function PortfolioTab() {
         Add investment
       </button>
 
-      {/* Add investment form */}
       {showAdd && (
         <div className="bg-surface border border-border rounded-xl p-4 mb-4">
           <p className="text-text-main font-medium text-sm mb-4">New investment</p>
@@ -383,10 +468,12 @@ export default function PortfolioTab() {
         </div>
       )}
 
-      {/* Active investments */}
+      {/* Active holdings */}
       {activeInvestments.length > 0 && (
         <div className="mb-6">
-          <p className="text-text-muted text-xs font-medium mb-3">ACTIVE HOLDINGS ({activeInvestments.length})</p>
+          <p className="text-text-muted text-xs font-medium mb-3">
+            ACTIVE HOLDINGS ({activeInvestments.length})
+          </p>
           <div className="flex flex-col gap-3">
             {activeInvestments.map(inv => {
               const hasLivePrice = inv.current_price && inv.purchase_price && inv.purchase_price > 0
@@ -395,6 +482,8 @@ export default function PortfolioTab() {
               const pl = hasLivePrice ? currentValue - inv.amount : 0
               const plPct = hasLivePrice ? ((pl / inv.amount) * 100) : 0
               const risk = hasLivePrice ? getRiskLabel(plPct) : null
+              const allocationPct = totalCurrentValue > 0 ? ((currentValue / totalCurrentValue) * 100).toFixed(1) : '0'
+              const allocationItem = allocationData.find(a => a.name === (inv.ticker || inv.name.slice(0, 4).toUpperCase()))
 
               return (
                 <div key={inv.id} className="relative overflow-hidden rounded-xl group">
@@ -415,47 +504,47 @@ export default function PortfolioTab() {
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                   >
+                    {/* Header */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-xl bg-elevated flex items-center justify-center flex-shrink-0">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: allocationItem?.color ? `${allocationItem.color}20` : 'var(--color-elevated)', border: `1px solid ${allocationItem?.color || 'var(--color-border)'}` }}
+                        >
                           <span className="text-text-main text-xs font-bold font-mono">
                             {inv.ticker?.slice(0, 3) || inv.name.slice(0, 2).toUpperCase()}
                           </span>
                         </div>
                         <div>
                           <p className="text-text-main font-medium text-sm">{inv.name}</p>
-                          <p className="text-text-muted text-xs">{inv.date}</p>
+                          <p className="text-text-hint text-xs">{inv.date} · {allocationPct}% of portfolio</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-text-main font-semibold font-mono text-sm">
-                          {CURRENCIES[inv.currency]}{inv.amount.toLocaleString()}
-                          <span className="text-text-muted text-xs font-normal"> in</span>
+                          {CURRENCIES[inv.currency]}{currentValue > inv.amount ? currentValue.toFixed(0) : inv.amount.toLocaleString()}
                         </p>
                         {hasLivePrice && (
-                          <p className="text-text-main font-mono text-sm">
-                            {CURRENCIES[inv.currency]}{currentValue.toFixed(2)}
-                            <span className="text-text-muted text-xs font-normal"> now</span>
+                          <p className="text-text-muted text-xs font-mono">
+                            {CURRENCIES[inv.currency]}{inv.amount.toLocaleString()} in
                           </p>
                         )}
                       </div>
                     </div>
 
-                    {/* P&L bar */}
+                    {/* P&L section */}
                     {hasLivePrice && (
                       <div className="mb-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-1">
-                            <span className={`text-sm ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                              {pl >= 0 ? '↑' : '↓'}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-bold ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                              {pl >= 0 ? '↑' : '↓'} {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)}
                             </span>
-                            <span className={`text-xs font-mono font-medium ${pl >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                              {pl >= 0 ? '+' : ''}{CURRENCIES[inv.currency]}{pl.toFixed(2)} ({plPct.toFixed(1)}%)
+                            <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${pl >= 0 ? 'bg-primary-tint text-primary' : 'bg-loss-bg text-loss-text'}`}>
+                              {pl >= 0 ? '+' : ''}{plPct.toFixed(1)}%
                             </span>
                           </div>
-                          {risk && (
-                            <span className={`text-xs font-medium ${risk.color}`}>{risk.label}</span>
-                          )}
+                          {risk && <span className={`text-xs font-medium ${risk.color}`}>{risk.label}</span>}
                         </div>
                         <div className="w-full h-1.5 bg-elevated rounded-full">
                           <div
@@ -513,7 +602,7 @@ export default function PortfolioTab() {
         </div>
       )}
 
-      {/* Closed investments */}
+      {/* Closed positions */}
       {closedInvestments.length > 0 && (
         <div>
           <p className="text-text-muted text-xs font-medium mb-3">CLOSED POSITIONS ({closedInvestments.length})</p>
