@@ -151,6 +151,25 @@ export default function AlertsTab() {
         ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in 24h — now at ${newPrice}`
         : alert.fired_message
 
+      // Send email if alert just fired
+      if (fired && !alert.fired) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) {
+          fetch('/api/send-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: user.email,
+              asset: alert.asset,
+              ticker: alert.ticker,
+              price: newPrice,
+              change: change24h,
+              threshold: alert.threshold,
+            })
+          }).catch(e => console.error('Email send failed:', e))
+        }
+      }
+
       if (newPrice !== alert.current_price || fired !== alert.fired) {
         await supabase.from('alerts').update({
           current_price: newPrice, fired, fired_message: firedMessage || null,

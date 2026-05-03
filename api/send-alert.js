@@ -12,7 +12,7 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'AlgoVest <alerts@algovest.app>',
+      from: 'AlgoVest <onboarding@resend.dev>',
       to: [to],
       subject: `Alert: ${asset} dropped ${Math.abs(change).toFixed(1)}%`,
       html: `
