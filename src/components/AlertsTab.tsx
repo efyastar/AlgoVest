@@ -44,6 +44,22 @@ const getSuggestedAction = (_ticker: string, change: number) => {
   return 'Major correction — wait for stabilization before buying'
 }
 
+const getMarketSentiment = (change: number) => {
+  if (change > 5) return { label: 'Bullish', color: 'text-primary', bg: 'bg-primary-tint' }
+  if (change > 0) return { label: 'Slightly bullish', color: 'text-primary', bg: 'bg-primary-tint' }
+  if (change > -3) return { label: 'Slightly bearish', color: 'text-loss-text', bg: 'bg-loss-bg' }
+  if (change > -7) return { label: 'Bearish', color: 'text-loss-text', bg: 'bg-loss-bg' }
+  return { label: 'High volatility', color: 'text-loss-text', bg: 'bg-loss-bg' }
+}
+
+const getSignificance = (change: number, threshold: number) => {
+  const ratio = Math.abs(change) / threshold
+  if (ratio < 0.5) return { label: 'Minor move', color: 'text-text-muted' }
+  if (ratio < 1) return { label: 'Moderate move', color: 'text-text-muted' }
+  if (ratio < 2) return { label: 'Significant move', color: 'text-loss-text' }
+  return { label: 'Major move', color: 'text-loss-text' }
+}
+
 export default function AlertsTab() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +76,7 @@ export default function AlertsTab() {
   const [editThresholdValue, setEditThresholdValue] = useState('')
   const [userPhone, setUserPhone] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [livePriceChanges, setLivePriceChanges] = useState<Record<string, number>>({})
   const startXRef = useRef(0)
 
   useEffect(() => {
@@ -74,11 +91,7 @@ export default function AlertsTab() {
   const fetchUserContact = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) setUserEmail(user.email)
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('phone_number')
-      .maybeSingle()
+    const { data } = await supabase.from('profiles').select('phone_number').maybeSingle()
     if (data?.phone_number) setUserPhone(data.phone_number)
   }
 
@@ -103,34 +116,23 @@ export default function AlertsTab() {
   }
 
   const sendNotifications = async (alert: Alert, newPrice: string, change24h: number) => {
-    // Send email
     if (userEmail) {
       fetch('/api/send-alert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: userEmail,
-          asset: alert.asset,
-          ticker: alert.ticker,
-          price: newPrice,
-          change: change24h,
-          threshold: alert.threshold,
+          to: userEmail, asset: alert.asset, ticker: alert.ticker,
+          price: newPrice, change: change24h, threshold: alert.threshold,
         })
       }).catch(e => console.error('Email send failed:', e))
     }
-
-    // Send SMS if phone number exists
     if (userPhone) {
       fetch('/api/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: userPhone,
-          asset: alert.asset,
-          ticker: alert.ticker,
-          price: newPrice,
-          change: change24h,
-          threshold: alert.threshold,
+          to: userPhone, asset: alert.asset, ticker: alert.ticker,
+          price: newPrice, change: change24h, threshold: alert.threshold,
         })
       }).catch(e => console.error('SMS send failed:', e))
     }
@@ -176,6 +178,8 @@ export default function AlertsTab() {
       } catch (e) {}
     }
 
+    const newPriceChanges: Record<string, number> = {}
+
     const updatedAlerts = await Promise.all(alertsToUse.map(async alert => {
       const coinId = cryptoMap[alert.ticker]
       let newPrice = alert.current_price
@@ -194,6 +198,7 @@ export default function AlertsTab() {
         gotData = true
       }
 
+      if (gotData) newPriceChanges[alert.id] = change24h
       if (!gotData) return alert
 
       const fired = change24h <= -alert.threshold
@@ -201,10 +206,7 @@ export default function AlertsTab() {
         ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in 24h — now at ${newPrice}`
         : alert.fired_message
 
-      // Send notifications only when alert first fires
-      if (fired && !alert.fired) {
-        sendNotifications(alert, newPrice, change24h)
-      }
+      if (fired && !alert.fired) sendNotifications(alert, newPrice, change24h)
 
       if (newPrice !== alert.current_price || fired !== alert.fired) {
         await supabase.from('alerts').update({
@@ -216,6 +218,7 @@ export default function AlertsTab() {
     }))
 
     setAlerts(updatedAlerts as Alert[])
+    setLivePriceChanges(newPriceChanges)
     setFetchingPrices(false)
   }
 
@@ -272,15 +275,15 @@ export default function AlertsTab() {
     setLoadingAi(prev => ({ ...prev, [alert.id]: true }))
     const change = parseFloat(alert.fired_message?.match(/(\d+\.?\d*)%/)?.[1] || '5')
     const prompt = `You are Afrifa, a direct financial advisor.
-      ${alert.asset} (${alert.ticker}) has dropped ${change}% in 24 hours and is now at ${alert.current_price}.
-      The user set an alert for a ${alert.threshold}% drop threshold.
+${alert.asset} (${alert.ticker}) has dropped ${change}% in 24 hours and is now at ${alert.current_price}.
+The user set an alert for a ${alert.threshold}% drop threshold.
 
-      In exactly 3 short sentences:
-      1. Explain what this price drop likely means (market context)
-      2. Give a specific buy/hold/wait recommendation with reasoning
-      3. Suggest a specific price target or next action
+In exactly 3 short sentences:
+1. Explain what this price drop likely means (market context)
+2. Give a specific buy/hold/wait recommendation with reasoning
+3. Suggest a specific price target or next action
 
-      Be direct, specific and confident. Speak as Afrifa.`
+Be direct, specific and confident. Speak as Afrifa.`
 
     try {
       const resp = await fetch(
@@ -328,10 +331,10 @@ export default function AlertsTab() {
   return (
     <div className="w-full max-w-2xl mx-auto">
 
-      {/* No phone number warning */}
+      {/* No phone warning */}
       {!userPhone && (
         <div className="bg-elevated border border-border rounded-xl px-4 py-3 mb-4">
-          <p className="text-text-muted text-xs">Add your phone number to receive SMS alerts — tap your name in the header to open settings</p>
+          <p className="text-text-muted text-xs">Add your phone number in settings to receive SMS alerts when prices drop</p>
         </div>
       )}
 
@@ -343,6 +346,8 @@ export default function AlertsTab() {
             {firedAlerts.map(alert => {
               const change = parseFloat(alert.fired_message?.match(/(\d+\.?\d*)%/)?.[1] || '5')
               const suggestedAction = getSuggestedAction(alert.ticker, -change)
+              const sentiment = getMarketSentiment(-change)
+              const significance = getSignificance(-change, alert.threshold)
 
               return (
                 <div key={alert.id} className="bg-loss-bg border border-loss-text rounded-xl p-4">
@@ -352,7 +357,15 @@ export default function AlertsTab() {
                         <span className="text-text-main text-xs font-bold">{alert.ticker}</span>
                       </div>
                       <div>
-                        <p className="text-text-main text-sm font-semibold">{alert.asset}</p>
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <p className="text-text-main text-sm font-semibold">{alert.asset}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sentiment.bg} ${sentiment.color}`}>
+                            {sentiment.label}
+                          </span>
+                          <span className={`text-xs font-medium ${significance.color}`}>
+                            {significance.label}
+                          </span>
+                        </div>
                         <p className="text-loss-text text-xs font-medium">{alert.fired_message}</p>
                       </div>
                     </div>
@@ -405,85 +418,111 @@ export default function AlertsTab() {
 
       {/* Alert list */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden mb-4">
-        {alerts.map((alert, index) => (
-          <div
-            key={alert.id}
-            className={`relative overflow-hidden group ${index !== alerts.length - 1 ? 'border-b border-border' : ''}`}
-          >
-            <div className="absolute right-0 top-0 bottom-0 w-20 bg-loss-bg flex items-center justify-center">
-              <button onClick={() => deleteAlert(alert.id)} className="text-loss-text text-xs font-semibold">Delete</button>
-            </div>
+        {alerts.map((alert, index) => {
+          const change = livePriceChanges[alert.id] || 0
+          const sentiment = getMarketSentiment(change)
+          const significance = getSignificance(change, alert.threshold)
 
-            <button
-              onClick={() => deleteAlert(alert.id)}
-              className="absolute top-1/2 -translate-y-1/2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-loss-bg text-loss-text text-xs px-2 py-1 rounded-lg z-10 md:block hidden"
-            >
-              Delete
-            </button>
-
+          return (
             <div
-              className="flex items-start gap-3 px-4 py-4 bg-surface transition-all duration-200 md:group-hover:pl-16"
-              style={{ transform: swipedId === alert.id ? `translateX(${swipeX}px)` : 'translateX(0)' }}
-              onTouchStart={(e) => handleTouchStart(e, alert.id)}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
+              key={alert.id}
+              className={`relative overflow-hidden group ${index !== alerts.length - 1 ? 'border-b border-border' : ''}`}
             >
-              <div className="w-10 h-10 rounded-lg bg-elevated flex items-center justify-center flex-shrink-0">
-                <span className="text-text-main text-xs font-bold">{alert.ticker}</span>
-              </div>
-
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-text-main text-sm font-medium">{alert.asset}</p>
-                  <p className="text-text-main text-sm font-bold font-mono">{alert.current_price}</p>
-                </div>
-
-                <div className="flex items-center gap-1 mb-1">
-                  <span className="text-text-muted text-xs">Alert if drops</span>
-                  {editingThresholdId === alert.id ? (
-                    <input
-                      type="number"
-                      value={editThresholdValue}
-                      onChange={(e) => setEditThresholdValue(e.target.value)}
-                      onBlur={() => saveThreshold(alert.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && saveThreshold(alert.id)}
-                      autoFocus
-                      className="w-12 bg-elevated border border-primary rounded px-1 py-0.5 text-text-main text-xs outline-none text-center"
-                    />
-                  ) : (
-                    <button
-                      onClick={() => { setEditingThresholdId(alert.id); setEditThresholdValue(alert.threshold.toString()) }}
-                      className="text-primary text-xs font-medium border-b border-dashed border-primary"
-                    >
-                      {alert.threshold}%
-                    </button>
-                  )}
-                  <span className="text-text-muted text-xs">in 24h</span>
-                </div>
-
-                <p className="text-text-hint text-xs leading-relaxed mb-2">
-                  {getAlertContext(alert.ticker, alert.threshold)}
-                </p>
-
-                {alert.fired && (
-                  <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-loss-text animate-pulse" />
-                    <p className="text-loss-text text-xs font-medium">Signal fired — check above</p>
-                  </div>
-                )}
+              <div className="absolute right-0 top-0 bottom-0 w-20 bg-loss-bg flex items-center justify-center">
+                <button onClick={() => deleteAlert(alert.id)} className="text-loss-text text-xs font-semibold">Delete</button>
               </div>
 
               <button
-                onClick={() => toggleAlert(alert.id, alert.enabled)}
-                className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 mt-1 ${
-                  alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
-                }`}
+                onClick={() => deleteAlert(alert.id)}
+                className="absolute top-1/2 -translate-y-1/2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-loss-bg text-loss-text text-xs px-2 py-1 rounded-lg z-10 md:block hidden"
               >
-                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${alert.enabled ? 'left-5' : 'left-1'}`} />
+                Delete
               </button>
+
+              <div
+                className="flex items-start gap-3 px-4 py-4 bg-surface transition-all duration-200 md:group-hover:pl-16"
+                style={{ transform: swipedId === alert.id ? `translateX(${swipeX}px)` : 'translateX(0)' }}
+                onTouchStart={(e) => handleTouchStart(e, alert.id)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div className="w-10 h-10 rounded-lg bg-elevated flex items-center justify-center flex-shrink-0">
+                  <span className="text-text-main text-xs font-bold">{alert.ticker}</span>
+                </div>
+
+                <div className="flex-1">
+                  {/* Asset name + sentiment tags */}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-text-main text-sm font-medium">{alert.asset}</p>
+                      {change !== 0 && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${sentiment.bg} ${sentiment.color}`}>
+                          {sentiment.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-text-main text-sm font-bold font-mono">{alert.current_price}</p>
+                  </div>
+
+                  {/* 24h change + significance */}
+                  {change !== 0 && (
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-mono font-medium ${change >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                        {change >= 0 ? '+' : ''}{change.toFixed(2)}% 24h
+                      </span>
+                      <span className={`text-xs ${significance.color}`}>· {significance.label}</span>
+                    </div>
+                  )}
+
+                  {/* Threshold */}
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-text-muted text-xs">Alert if drops</span>
+                    {editingThresholdId === alert.id ? (
+                      <input
+                        type="number"
+                        value={editThresholdValue}
+                        onChange={(e) => setEditThresholdValue(e.target.value)}
+                        onBlur={() => saveThreshold(alert.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveThreshold(alert.id)}
+                        autoFocus
+                        className="w-12 bg-elevated border border-primary rounded px-1 py-0.5 text-text-main text-xs outline-none text-center"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => { setEditingThresholdId(alert.id); setEditThresholdValue(alert.threshold.toString()) }}
+                        className="text-primary text-xs font-medium border-b border-dashed border-primary"
+                      >
+                        {alert.threshold}%
+                      </button>
+                    )}
+                    <span className="text-text-muted text-xs">in 24h</span>
+                  </div>
+
+                  {/* Context */}
+                  <p className="text-text-hint text-xs leading-relaxed mb-1">
+                    {getAlertContext(alert.ticker, alert.threshold)}
+                  </p>
+
+                  {alert.fired && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-loss-text animate-pulse" />
+                      <p className="text-loss-text text-xs font-medium">Signal fired — check above</p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => toggleAlert(alert.id, alert.enabled)}
+                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 mt-1 ${
+                    alert.enabled ? 'bg-primary' : 'bg-elevated border border-border'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${alert.enabled ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Add alert */}
