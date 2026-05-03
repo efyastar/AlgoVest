@@ -58,13 +58,29 @@ export default function AlertsTab() {
   const [swipeX, setSwipeX] = useState(0)
   const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null)
   const [editThresholdValue, setEditThresholdValue] = useState('')
+  const [userPhone, setUserPhone] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const startXRef = useRef(0)
 
-  useEffect(() => { fetchAlerts() }, [])
+  useEffect(() => {
+    fetchAlerts()
+    fetchUserContact()
+  }, [])
 
   useEffect(() => {
     if (!loading && alerts.length > 0) fetchLivePrices()
   }, [loading])
+
+  const fetchUserContact = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) setUserEmail(user.email)
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('phone_number')
+      .maybeSingle()
+    if (data?.phone_number) setUserPhone(data.phone_number)
+  }
 
   const fetchAlerts = async () => {
     setLoading(true)
@@ -84,6 +100,40 @@ export default function AlertsTab() {
     const toInsert = DEFAULT_ALERTS.map(a => ({ ...a, user_id: user.id }))
     const { data, error } = await supabase.from('alerts').insert(toInsert).select()
     if (!error && data) setAlerts(data)
+  }
+
+  const sendNotifications = async (alert: Alert, newPrice: string, change24h: number) => {
+    // Send email
+    if (userEmail) {
+      fetch('/api/send-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: userEmail,
+          asset: alert.asset,
+          ticker: alert.ticker,
+          price: newPrice,
+          change: change24h,
+          threshold: alert.threshold,
+        })
+      }).catch(e => console.error('Email send failed:', e))
+    }
+
+    // Send SMS if phone number exists
+    if (userPhone) {
+      fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: userPhone,
+          asset: alert.asset,
+          ticker: alert.ticker,
+          price: newPrice,
+          change: change24h,
+          threshold: alert.threshold,
+        })
+      }).catch(e => console.error('SMS send failed:', e))
+    }
   }
 
   const fetchLivePrices = async (currentAlerts?: Alert[]) => {
@@ -151,23 +201,9 @@ export default function AlertsTab() {
         ? `${alert.asset} dropped ${Math.abs(change24h).toFixed(1)}% in 24h — now at ${newPrice}`
         : alert.fired_message
 
-      // Send email if alert just fired
+      // Send notifications only when alert first fires
       if (fired && !alert.fired) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.email) {
-          fetch('/api/send-alert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: user.email,
-              asset: alert.asset,
-              ticker: alert.ticker,
-              price: newPrice,
-              change: change24h,
-              threshold: alert.threshold,
-            })
-          }).catch(e => console.error('Email send failed:', e))
-        }
+        sendNotifications(alert, newPrice, change24h)
       }
 
       if (newPrice !== alert.current_price || fired !== alert.fired) {
@@ -241,7 +277,7 @@ The user set an alert for a ${alert.threshold}% drop threshold.
 
 In exactly 3 short sentences:
 1. Explain what this price drop likely means (market context)
-2. Give a specific buy/hold/wait recommendation with reasoning  
+2. Give a specific buy/hold/wait recommendation with reasoning
 3. Suggest a specific price target or next action
 
 Be direct, specific and confident. Speak as Afrifa.`
@@ -292,6 +328,19 @@ Be direct, specific and confident. Speak as Afrifa.`
   return (
     <div className="w-full max-w-2xl mx-auto">
 
+      {/* No phone number warning */}
+      {!userPhone && (
+        <div className="bg-elevated border border-border rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+          <p className="text-text-muted text-xs">Add your phone number to receive SMS alerts</p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('openSettings'))}
+            className="text-primary text-xs font-medium"
+          >
+            Add number
+          </button>
+        </div>
+      )}
+
       {/* Fired alerts */}
       {firedAlerts.length > 0 && (
         <div className="mb-6">
@@ -316,13 +365,11 @@ Be direct, specific and confident. Speak as Afrifa.`
                     <p className="text-text-main text-sm font-bold font-mono">{alert.current_price}</p>
                   </div>
 
-                  {/* Suggested action */}
                   <div className="bg-elevated rounded-lg px-3 py-2 mb-3">
                     <p className="text-text-muted text-xs font-medium mb-0.5">SUGGESTED ACTION</p>
                     <p className="text-text-main text-xs font-medium">{suggestedAction}</p>
                   </div>
 
-                  {/* Timeframe context */}
                   <p className="text-text-hint text-xs mb-3">
                     Timeframe: 24h · Threshold: {alert.threshold}% · Triggered at {alert.current_price}
                   </p>
@@ -343,7 +390,7 @@ Be direct, specific and confident. Speak as Afrifa.`
                       disabled={loadingAi[alert.id]}
                       className="w-full bg-primary text-base text-xs font-semibold py-2 rounded-lg disabled:opacity-50"
                     >
-                      {loadingAi[alert.id] ? 'Afrifa is thinking...' : 'Get Afrifa\'s analysis'}
+                      {loadingAi[alert.id] ? 'Afrifa is thinking...' : "Get Afrifa's analysis"}
                     </button>
                   )}
                 </div>
@@ -369,12 +416,10 @@ Be direct, specific and confident. Speak as Afrifa.`
             key={alert.id}
             className={`relative overflow-hidden group ${index !== alerts.length - 1 ? 'border-b border-border' : ''}`}
           >
-            {/* Delete behind */}
             <div className="absolute right-0 top-0 bottom-0 w-20 bg-loss-bg flex items-center justify-center">
               <button onClick={() => deleteAlert(alert.id)} className="text-loss-text text-xs font-semibold">Delete</button>
             </div>
 
-            {/* Desktop delete */}
             <button
               onClick={() => deleteAlert(alert.id)}
               className="absolute top-1/2 -translate-y-1/2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-loss-bg text-loss-text text-xs px-2 py-1 rounded-lg z-10 md:block hidden"
@@ -422,7 +467,6 @@ Be direct, specific and confident. Speak as Afrifa.`
                   <span className="text-text-muted text-xs">in 24h</span>
                 </div>
 
-                {/* Context */}
                 <p className="text-text-hint text-xs leading-relaxed mb-2">
                   {getAlertContext(alert.ticker, alert.threshold)}
                 </p>
