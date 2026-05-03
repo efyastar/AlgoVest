@@ -86,12 +86,20 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
         >
           AlgoVest
         </h1>
-        <button
-          onClick={onGetStarted}
-          className="bg-primary hover:bg-primary-hover text-base text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
-        >
-          Get Started
-        </button>
+        <div className="flex items-center gap-2">
+            <button
+                onClick={onGetStarted}
+                className="text-text-muted text-sm font-medium hover:text-text-main transition-colors px-3 py-2"
+            >
+                Sign in
+            </button>
+            <button
+                onClick={onGetStarted}
+                className="bg-primary hover:bg-primary-hover text-base text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+            >
+                Get started
+            </button>
+        </div>
       </nav>
 
       <div className="relative z-10">
