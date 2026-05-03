@@ -43,6 +43,26 @@ type NewsItem = {
   source: string
   time: string
   image: string
+  tag?: string
+}
+
+const isMarketOpen = () => {
+  const now = new Date()
+  const day = now.getDay()
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  const timeInMinutes = hours * 60 + minutes
+
+  // Convert to EST (UTC-5 or UTC-4 during DST)
+  const estOffset = -5
+  const estHours = (now.getUTCHours() + estOffset + 24) % 24
+  const estMinutes = now.getUTCMinutes()
+  const estTime = estHours * 60 + estMinutes
+
+  const isWeekday = day >= 1 && day <= 5
+  const isDuringHours = estTime >= 9 * 60 + 30 && estTime < 16 * 60
+
+  return isWeekday && isDuringHours
 }
 
 export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: string) => void, userName: string }) {
@@ -58,6 +78,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
   const [greeting, setGreeting] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [secondsAgo, setSecondsAgo] = useState(0)
+  const [marketOpen] = useState(isMarketOpen())
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -69,7 +90,6 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
     fetchNews()
   }, [])
 
-  // Update "X seconds ago" every second
   useEffect(() => {
     if (!lastUpdated) return
     const interval = setInterval(() => {
@@ -100,7 +120,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
   const fetchMarketData = async () => {
     try {
       const resp = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true&include_7d_change=true'
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true'
       )
       const data = await resp.json()
       setMarketData([
@@ -113,6 +133,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
   }
 
   const fetchNews = async () => {
+    const watchedTickers = alerts.map(a => a.ticker)
     setNews([
       {
         title: 'S&P 500 hits new high as tech earnings beat expectations',
@@ -120,6 +141,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
         source: 'Yahoo Finance',
         time: 'Today',
         image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&q=80',
+        tag: watchedTickers.includes('AAPL') || watchedTickers.includes('NVDA') ? 'In your watchlist' : undefined,
       },
       {
         title: 'Bitcoin holds above $78,000 as institutional demand grows',
@@ -127,6 +149,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
         source: 'CoinDesk',
         time: 'Today',
         image: 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400&q=80',
+        tag: watchedTickers.includes('BTC') ? 'You are watching BTC' : undefined,
       },
       {
         title: 'African markets attract record foreign investment in 2026',
@@ -141,6 +164,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
         source: 'Morningstar',
         time: 'Today',
         image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=400&q=80',
+        tag: 'Relevant to your long-term plan',
       },
     ])
   }
@@ -155,6 +179,7 @@ export default function HomeTab({ onNavigate, userName }: { onNavigate: (tab: st
     const prompt = `You are Afrifa, a friendly AI financial advisor.
 User's portfolio: ${summary}
 Current market: ${marketSummary}
+Market status: ${marketOpen ? 'US stock market is currently OPEN' : 'US stock market is currently CLOSED'}
 Give personalized advice in 2-3 sentences. Be specific, direct and friendly.
 If they have no investments, encourage them to start.
 If markets are down, advise calmly. If up, suggest opportunities.`
@@ -213,9 +238,17 @@ If markets are down, advise calmly. If up, suggest opportunities.`
         >
           {greeting}, {userName}
         </h2>
-        <p className="text-text-muted text-sm mt-1">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
+        <div className="flex items-center gap-3 mt-1">
+          <p className="text-text-muted text-sm">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+            marketOpen ? 'bg-primary-tint text-primary' : 'bg-elevated text-text-muted'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-primary animate-pulse' : 'bg-text-muted'}`} />
+            {marketOpen ? 'Market open' : 'Market closed'}
+          </div>
+        </div>
       </div>
 
       {/* Portfolio summary */}
@@ -238,52 +271,43 @@ If markets are down, advise calmly. If up, suggest opportunities.`
           </div>
         ) : (
           <>
-            {/* Main numbers */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div>
-                <p className="text-text-muted text-xs mb-1">Total invested</p>
-                <p className="text-text-main font-bold text-lg font-mono">{CURRENCIES[currency]}{totalInvested.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-text-muted text-xs mb-1">Current value</p>
-                <p className="text-text-main font-bold text-lg font-mono">{CURRENCIES[currency]}{totalCurrentValue.toFixed(0)}</p>
-              </div>
-              <div>
-                <p className="text-text-muted text-xs mb-1">Total P&L</p>
-                <div className="flex items-center gap-1">
-                  <span className={`text-sm ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                    {totalPL >= 0 ? '↑' : '↓'}
-                  </span>
-                  <p className={`font-bold text-lg font-mono ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                    {CURRENCIES[currency]}{Math.abs(totalPL).toFixed(0)}
-                  </p>
-                </div>
+            {/* Hero number — current value most prominent */}
+            <div className="mb-4">
+              <p className="text-text-muted text-xs mb-1">Current value</p>
+              <p className="text-text-main font-bold text-4xl font-mono">
+                {CURRENCIES[currency]}{totalCurrentValue.toFixed(0)}
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-sm font-medium ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
+                  {totalPL >= 0 ? '↑' : '↓'} {totalPL >= 0 ? '+' : ''}{CURRENCIES[currency]}{Math.abs(totalPL).toFixed(0)}
+                </span>
                 {totalPLPct && (
-                  <p className={`text-xs font-mono ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
-                    {totalPL >= 0 ? '+' : '-'}{Math.abs(parseFloat(totalPLPct))}% all time
-                  </p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${totalPL >= 0 ? 'bg-primary-tint text-primary' : 'bg-loss-bg text-loss-text'}`}>
+                    {totalPL >= 0 ? '+' : ''}{totalPLPct}% all time
+                  </span>
                 )}
               </div>
+              <p className="text-text-hint text-xs mt-1">
+                {CURRENCIES[currency]}{totalInvested.toLocaleString()} invested
+              </p>
             </div>
 
             {/* Portfolio interpretation */}
             <div className={`rounded-xl px-3 py-2 mb-4 ${totalPL >= 0 ? 'bg-primary-tint border border-primary' : 'bg-loss-bg border border-loss-text'}`}>
               <p className={`text-xs font-medium ${totalPL >= 0 ? 'text-primary' : 'text-loss-text'}`}>
                 {totalPL >= 0
-                  ? `Your portfolio is up ${totalPLPct}% — you are outperforming a savings account`
-                  : `Your portfolio is down ${totalPLPct}% — markets fluctuate, stay focused on the long term`
+                  ? `Up ${totalPLPct}% — your investments are growing`
+                  : `Down ${Math.abs(parseFloat(totalPLPct || '0')).toFixed(2)}% — markets fluctuate, stay focused on the long term`
                 }
               </p>
             </div>
 
-            {/* Holdings list */}
+            {/* Holdings */}
             <div className="flex flex-col gap-2">
               {investments.slice(0, 3).map(inv => {
                 const hasLive = inv.current_price && inv.purchase_price && inv.purchase_price > 0
                 const currentVal = hasLive ? ((inv.amount / inv.purchase_price!) * inv.current_price!).toFixed(2) : null
                 const pl = hasLive ? ((inv.current_price! - inv.purchase_price!) / inv.purchase_price! * 100).toFixed(1) : null
-                const plValue = hasLive ? ((inv.amount / inv.purchase_price!) * inv.current_price!) - inv.amount : null
-
                 return (
                   <div key={inv.id} className="flex items-center justify-between py-2 border-t border-border">
                     <div className="flex items-center gap-2">
@@ -301,7 +325,7 @@ If markets are down, advise calmly. If up, suggest opportunities.`
                       <p className="text-text-main text-sm font-mono font-medium">
                         {currentVal ? `${CURRENCIES[inv.currency]}${parseFloat(currentVal).toLocaleString()}` : `${CURRENCIES[inv.currency]}${inv.amount.toLocaleString()}`}
                       </p>
-                      {pl && plValue !== null && (
+                      {pl && (
                         <div className="flex items-center justify-end gap-1">
                           <span className={`text-xs ${parseFloat(pl) >= 0 ? 'text-primary' : 'text-loss-text'}`}>
                             {parseFloat(pl) >= 0 ? '↑' : '↓'}
@@ -316,7 +340,7 @@ If markets are down, advise calmly. If up, suggest opportunities.`
                 )
               })}
               {investments.length > 3 && (
-                <button onClick={() => onNavigate('portfolio')} className="text-primary text-xs font-medium pt-2 border-t border-border">
+                <button onClick={() => onNavigate('portfolio')} className="text-primary text-xs font-medium pt-2 border-t border-border text-left">
                   +{investments.length - 3} more holdings
                 </button>
               )}
@@ -338,7 +362,7 @@ If markets are down, advise calmly. If up, suggest opportunities.`
               />
             </div>
             <p className="text-text-hint text-xs mt-1">
-              {CURRENCIES[currency]}{totalInvested.toLocaleString()} of {CURRENCIES[currency]}{budgetGoal.toLocaleString()} goal · {CURRENCIES[currency]}{Math.max(0, budgetGoal - totalInvested).toLocaleString()} remaining
+              {CURRENCIES[currency]}{totalInvested.toLocaleString()} of {CURRENCIES[currency]}{budgetGoal.toLocaleString()} · {CURRENCIES[currency]}{Math.max(0, budgetGoal - totalInvested).toLocaleString()} remaining
             </p>
           </div>
         )}
@@ -373,7 +397,15 @@ If markets are down, advise calmly. If up, suggest opportunities.`
       {/* Live market */}
       <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-text-muted text-xs font-medium">LIVE MARKET</p>
+          <div className="flex items-center gap-2">
+            <p className="text-text-muted text-xs font-medium">LIVE MARKET</p>
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
+              marketOpen ? 'bg-primary-tint text-primary' : 'bg-elevated text-text-muted'
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-primary animate-pulse' : 'bg-text-muted'}`} />
+              {marketOpen ? 'Open' : 'Closed'}
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             {lastUpdated && (
               <p className="text-text-hint text-xs">Updated {formatSecondsAgo(secondsAgo)}</p>
@@ -381,7 +413,7 @@ If markets are down, advise calmly. If up, suggest opportunities.`
             <button onClick={() => onNavigate('alerts')} className="text-primary text-xs font-medium">Set alerts</button>
           </div>
         </div>
-        <p className="text-text-hint text-xs mb-4">24h price change</p>
+        <p className="text-text-hint text-xs mb-4">Crypto trades 24/7 · Stocks: Mon–Fri 9:30am–4pm EST</p>
 
         <div className="flex flex-col gap-3">
           {marketData.length === 0 ? (
@@ -395,7 +427,7 @@ If markets are down, advise calmly. If up, suggest opportunities.`
                   </div>
                   <div>
                     <p className="text-text-main text-sm font-medium">{item.name}</p>
-                    <p className="text-text-hint text-xs">Crypto · 24h</p>
+                    <p className="text-text-hint text-xs">Crypto · 24h change</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -452,9 +484,12 @@ If markets are down, advise calmly. If up, suggest opportunities.`
         )}
       </div>
 
-      {/* Market news */}
+      {/* Market news — tagged to watchlist */}
       <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
-        <p className="text-text-muted text-xs font-medium mb-4">MARKET NEWS</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-text-muted text-xs font-medium">MARKET NEWS</p>
+          <p className="text-text-hint text-xs">Relevant to your portfolio</p>
+        </div>
         <div className="flex flex-col gap-3">
           {news.map((item, i) => (
             <button
@@ -468,6 +503,11 @@ If markets are down, advise calmly. If up, suggest opportunities.`
                 className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
               />
               <div className="flex-1">
+                {item.tag && (
+                  <span className="inline-block text-xs bg-primary-tint text-primary px-2 py-0.5 rounded-full font-medium mb-1">
+                    {item.tag}
+                  </span>
+                )}
                 <p className="text-text-main text-sm font-medium leading-snug line-clamp-2 mb-1">
                   {item.title}
                 </p>
