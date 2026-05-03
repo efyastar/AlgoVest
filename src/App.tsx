@@ -128,6 +128,7 @@ export default function App() {
         <LoginPage
           onSignUp={() => setScreen('onboarding')}
           onLogin={handleLogin}
+          onBack={() => setScreen('landing')}
         />
       )}
 

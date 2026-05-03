@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
 
-export default function LoginPage({ onSignUp: _onSignUp, onLogin }: { onSignUp: () => void, onLogin: () => void }) {
+export default function LoginPage({ onSignUp: _onSignUp, onLogin, onBack }: { onSignUp: () => void, onLogin: () => void, onBack: () => void }) {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,7 +46,7 @@ export default function LoginPage({ onSignUp: _onSignUp, onLogin }: { onSignUp: 
 
         {/* Back to landing */}
         <button
-          onClick={() => window.history.back()}
+          onClick={onBack}
           className="text-text-muted text-sm mb-6 hover:text-text-main transition-colors flex items-center gap-1"
         >
           ← Back
