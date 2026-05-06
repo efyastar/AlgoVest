@@ -49,9 +49,6 @@ type NewsItem = {
 const isMarketOpen = () => {
   const now = new Date()
   const day = now.getDay()
-  const hours = now.getHours()
-  const minutes = now.getMinutes()
-  const timeInMinutes = hours * 60 + minutes
 
   // Convert to EST (UTC-5 or UTC-4 during DST)
   const estOffset = -5
