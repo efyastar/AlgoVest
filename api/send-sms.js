@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   const authToken = process.env.TWILIO_AUTH_TOKEN
   const fromNumber = process.env.TWILIO_PHONE_NUMBER
 
-  const message = `AlgoVest Alert: ${asset} (${ticker}) dropped ${Math.abs(change).toFixed(1)}% in 24h and is now at ${price}. You set a ${threshold}% threshold. Open AlgoVest to review: https://algo-vest-b864.vercel.app`
+  const message = `InSmartVest Alert: ${asset} (${ticker}) dropped ${Math.abs(change).toFixed(1)}% in 24h and is now at ${price}. You set a ${threshold}% threshold. Open InSmartVest to review: https://algo-vest-b864.vercel.app`
 
   const response = await fetch(
     `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,

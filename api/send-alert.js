@@ -12,13 +12,13 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'AlgoVest <onboarding@resend.dev>',
+      from: 'InSmartVest <onboarding@resend.dev>',
       to: ['fosuafia08@gmail.com'],
       subject: `Alert: ${asset} dropped ${Math.abs(change).toFixed(1)}%`,
       html: `
         <div style="font-family: Inter, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0a0a0a; color: #f5f5f5; border-radius: 16px;">
           <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #f5f5f5;">
-            AlgoVest Alert
+            InSmartVest Alert
           </h1>
           <p style="color: #6b7280; margin-bottom: 24px;">Market signal detected</p>
 
@@ -42,12 +42,12 @@ export default async function handler(req, res) {
 
           <a href="https://algo-vest-b864.vercel.app" 
              style="display: block; background: #22c55e; color: #0a0a0a; text-align: center; padding: 14px; border-radius: 12px; font-weight: 700; text-decoration: none; margin-bottom: 20px;">
-            Open AlgoVest to review
+            Open InSmartVest to review
           </a>
 
           <p style="color: #4b5563; font-size: 12px; text-align: center;">
             Not financial advice. Always do your own research.<br/>
-            AlgoVest · Unsubscribe
+            InSmartVest · Unsubscribe
           </p>
         </div>
       `,

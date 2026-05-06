@@ -109,7 +109,7 @@ export default function App() {
       <div className="min-h-screen bg-base flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <p className="text-text-main text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-            AlgoVest
+            InSmartVest
           </p>
           <p className="text-text-muted text-sm animate-pulse">Loading...</p>
         </div>
@@ -214,7 +214,7 @@ export default function App() {
               className="text-text-main text-xl font-bold mb-8 px-2"
               style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              AlgoVest
+              InSmartVest
             </p>
             {tabs.map(tab => (
               <button

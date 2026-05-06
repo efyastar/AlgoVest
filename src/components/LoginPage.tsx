@@ -62,7 +62,7 @@ export default function LoginPage({ onSignUp: _onSignUp, onLogin, onBack }: { on
               {isSignUp ? 'Get started' : 'Welcome back'}
             </h1>
             <p className="text-text-muted text-sm">
-              {isSignUp ? 'Create your AlgoVest account' : 'Sign in to your account'}
+              {isSignUp ? 'Create your InSmartVest account' : 'Sign in to your account'}
             </p>
           </div>
 
@@ -165,7 +165,7 @@ export default function LoginPage({ onSignUp: _onSignUp, onLogin, onBack }: { on
         </div>
 
         <p className="text-center text-text-hint text-xs mt-6">
-          By continuing you agree to AlgoVest's Terms of Service and Privacy Policy
+          By continuing you agree to InSmartVest's Terms of Service and Privacy Policy
         </p>
 
       </div>

@@ -28,7 +28,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
     {
       icon: 'G',
       title: 'Built for the world',
-      desc: 'Whether you are in Ghana, Nigeria, the UK or the US — AlgoVest recommends the right platforms and account types for your country.',
+      desc: 'Whether you are in Ghana, Nigeria, the UK or the US — InSmartVest recommends the right platforms and account types for your country.',
     },
     {
       icon: 'L',
@@ -84,7 +84,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
           className="text-xl font-bold text-text-main"
           style={{ fontFamily: "'Playfair Display', serif" }}
         >
-          AlgoVest
+          InSmartVest
         </h1>
         <div className="flex items-center gap-2">
             <button
@@ -120,7 +120,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
           </h2>
 
           <p className="text-text-muted text-lg md:text-xl leading-relaxed max-w-xl mb-10">
-            AlgoVest is your AI-powered investment companion. Get personalized portfolio suggestions, live market alerts and expert guidance — built for investors everywhere.
+            InSmartVest is your AI-powered investment companion. Get personalized portfolio suggestions, live market alerts and expert guidance — built for investors everywhere.
           </p>
 
           {/* Stats */}
@@ -144,7 +144,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
               Everything you need to invest well
             </h3>
             <p className="text-text-muted text-base max-w-lg mx-auto">
-              From AI-powered advice to real-time alerts — AlgoVest gives you the tools that were previously only available to professional investors.
+              From AI-powered advice to real-time alerts — InSmartVest gives you the tools that were previously only available to professional investors.
             </p>
           </div>
 
@@ -214,7 +214,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
               Ready to invest smarter?
             </h3>
             <p className="text-text-muted text-base mb-8 leading-relaxed">
-              Join investors across Africa, Europe and the Americas who are using AlgoVest to make better investment decisions every day.
+              Join investors across Africa, Europe and the Americas who are using InSmartVest to make better investment decisions every day.
             </p>
           </div>
         </section>
@@ -222,7 +222,7 @@ export default function LandingPage({ onGetStarted }: { onGetStarted: () => void
         {/* Footer */}
         <footer className="px-6 md:px-16 py-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-sm">
-            © 2026 AlgoVest. Built with Afrifa AI.
+            © 2026 InSmartVest. Built with Afrifa AI.
           </p>
           <p className="text-text-muted text-xs">
             Not financial advice. Always do your own research.
